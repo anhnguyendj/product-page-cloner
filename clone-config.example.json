@@ -1,0 +1,116 @@
+{
+  "_comment": "Copy into the work dir as clone-config.json (gitignored). Read by scripts/build_section.py. Keys starting with _ are notes and ignored.",
+
+  "slug": "my-product",
+  "_slug": "Short id: becomes sections/ppc-<slug>.liquid, snippets ppc-<slug>-c1/h1/j1, template product.ppc-<slug>.json.",
+
+  "source_url": "https://reference-store.example/products/some-product",
+  "_source_url": "Reference page (layout source). Used to resolve relative font URLs and to warn if its name leaks into the page.",
+
+  "image_map": {
+    "https://reference-store.example/cdn/shop/files/abc123.png": "https://cdn.shopify.com/s/files/1/XXXX/XXXX/XXXX/files/abc123.webp?v=1"
+  },
+  "_image_map": "Reference image URL (no query) -> YOUR Shopify CDN URL. Default to your OWN product media. Any image left pointing at the reference store is reported.",
+
+  "gallery": [
+    "https://cdn.shopify.com/s/files/1/XXXX/XXXX/XXXX/files/image-1.webp?v=1",
+    "https://cdn.shopify.com/s/files/1/XXXX/XXXX/XXXX/files/image-2.webp?v=1"
+  ],
+  "_gallery": "Your CDN image URLs in display order. Non-empty = rebuilt scroll-snap gallery (replaces their swiper). Empty = keep their gallery HTML.",
+
+  "gallery_class": "product-left",
+  "_gallery_class": "Class(es) for the rebuilt gallery wrapper so their layout CSS still applies. Shopify Dawn-like: 'grid__item product__media-wrapper'.",
+
+  "wrappers": [
+    "<div class=\"container d-flex align-items-start\">",
+    "</div>"
+  ],
+  "_wrappers": "Their outer divs (open, close) so descendant selectors like '#app .v-product .container' still match. Shopify Dawn-like example: ['<div class=\"page-width\"><div class=\"product product--medium grid grid--1-col grid--2-col-tablet\">', '</div></div>'].",
+
+  "font_urls": {
+    "OpenSans-Regular.woff2": "https://cdn.shopify.com/s/files/1/XXXX/XXXX/XXXX/files/ppc-opensans.woff2?v=1"
+  },
+  "_font_urls": "Font file name -> your Shopify Files URL (after staged upload). Shopify CDN sends CORS *, the reference store usually does not.",
+
+  "shop_pay": true,
+  "_shop_pay": "true = render YOUR store's real Shop Pay button + installments line in light DOM, projected via <slot name=\"ppc-pay\"> / <slot name=\"ppc-terms\"> (add those slots with html_fixes). Requires Shop Pay enabled on your store.",
+
+  "mix": {
+    "tiers": [[1, 0, ""], [2, 5, ""], [3, 10, "MOST POPULAR"], [4, 20, "BEST VALUE"]],
+    "default_tier": 2
+  },
+  "_mix": "Multi-style products only (omit or null for single-variant). tiers = [qty, percent, badge]; default_tier = index preselected. Percents MUST match the automatic discounts you create in stage 6.",
+
+  "related": true,
+  "_related": "Add the ppc-related section (products from metafield ppc.related). Hidden automatically when the metafield is empty.",
+
+  "drawer": {},
+  "_drawer": "Overrides for ppc-cart-drawer settings in this template, e.g. {\"tiers\": \"2:10,3:15,4:20\", \"accent\": \"#222222\"}. insurance_handle / insurance_percent default from store.json.",
+
+  "exit_popup": null,
+  "_exit_popup": "Optional: {\"code\": \"WELCOME10\", \"percent\": 10, \"list\": \"<ESP list id>\", \"hide_group\": \"\"}. brand + klaviyo_key come from store.json. The discount code must exist first (confirm with the user).",
+
+  "html_fixes": [
+    {
+      "pattern": "<div[^>]*class=\"quick-pay-btn-wrapper\".*?(?=<div[^>]*class=\"bulkcoupon)",
+      "replace": "<button type=\"button\" class=\"ppc-buynow\" data-ppc=\"buynow\">BUY IT NOW</button>",
+      "why": "Chinese platform: their express-pay buttons belong to their store -> our BUY IT NOW (or <slot name=\"ppc-pay\"></slot> with shop_pay)."
+    },
+    {
+      "pattern": "<div[^>]*class=\"[^\"]*trustpilot[^\"]*\".*?</div>",
+      "replace": "",
+      "why": "GUARDRAIL: never reproduce third-party rating badges / review counts from another store."
+    },
+    {
+      "pattern": "(?i)reference-store-name",
+      "replace": "Your Brand",
+      "why": "GUARDRAIL: never copy the reference store's name, logo or domain."
+    },
+    {
+      "pattern": "<button id=\"ProductSubmitButton-[^\"]*\" type=\"submit\" name=\"add\" class=\"",
+      "replace": "<button id=\"ppc-atc\" type=\"button\" class=\"product_single_add_button ",
+      "why": "Shopify source: make their ATC a plain button the cart drawer intercepts."
+    },
+    {
+      "pattern": "<sticky-atc ",
+      "replace": "<sticky-atc data-ppc=\"sticky\" ",
+      "why": "Shopify source: KEEP their sticky add-to-cart bar (must come BEFORE the buynow rule - same SectionAtcBtn id)."
+    },
+    {
+      "pattern": "(<div class=\"sticky-atc__button\">\\s*)<button id=\"SectionAtcBtn-[^\"]*\" type=\"button\" class=\"",
+      "replace": "\\1<button type=\"button\" data-ppc=\"sticky-atc\" class=\"",
+      "why": "Shopify source: sticky bar button -> adds 1 of the selected variant."
+    },
+    {
+      "pattern": "<button id=\"SectionAtcBtn-[^\"]*\" type=\"button\" class=\"",
+      "replace": "<button type=\"button\" data-ppc=\"buynow\" class=\"",
+      "why": "Shopify source: their Buy It Now."
+    },
+    {
+      "pattern": "<div data-shopify=\"payment-button\".*?</shopify-accelerated-checkout>\\s*</div>",
+      "replace": "<slot name=\"ppc-pay\"></slot>",
+      "why": "Shopify source + shop_pay: their accelerated checkout -> our real Shop Pay button."
+    },
+    {
+      "pattern": "<div><form method=\"post\" action=\"/cart/add\" id=\"product-form-installment.*?</form></div>",
+      "replace": "<slot name=\"ppc-terms\"></slot>",
+      "why": "Shopify source + shop_pay: their installments line -> ours."
+    },
+    {
+      "pattern": "<span id=\"custom-label-[^\"]*-1\">\\s*Style - [^<]*</span>",
+      "replace": "<span data-ppc-label=\"0\" data-label-prefix=\"Style - \">Style</span>",
+      "why": "Shopify source: 'Style - <value>' label follows the selected variant (option index 0)."
+    },
+    {
+      "pattern": "<quantity-breaks.*?</quantity-breaks>|<kaching-bundle[^>]*>\\s*</kaching-bundle>|<pickup-availability.*?</pickup-availability>",
+      "replace": "",
+      "why": "Shopify source: third-party bundle/quantity apps and pickup widgets do not work outside their store."
+    },
+    {
+      "pattern": "^",
+      "replace": "<style>.ppc-body>*,.product>.grid__item{min-width:0}.ppc-body>.page-width{width:100%;box-sizing:border-box}.product-form__quantity-and-btn{flex-wrap:wrap}.ppc-mx-w{flex:0 0 100%;width:100%}.product__info-container>*{margin-top:calc(var(--margin-top,0px)*.625);margin-bottom:calc(var(--margin-bottom,0px)*.625)}.rating-stars .rating-stars-and-text{font-size:16px!important;flex-wrap:nowrap}.rating-stars__label{white-space:nowrap;font-size:14px}@media (max-width:749px){.product__title h1{font-size:22px!important;line-height:1.3!important}}.ppc-html{--main-btn-bg:#2f2f2f;--price-color:#d0021b}</style>",
+      "why": "Shopify source (Dawn-like): the 3 CSS fixes - grid min-content overflow, flex-row ATC container, rem in inline styles (.625 = reference root 10px / your theme root 16px; adjust). See SKILL.md."
+    }
+  ],
+  "_html_fixes": "Ordered regex rules applied to the buy-box HTML (Python re, DOTALL). Each rule: {pattern, replace, why} or [pattern, replace]. The example mixes Chinese-platform and Shopify-source rules - keep only those that match your reference page and check the printed match counts (0 = rule did nothing)."
+}

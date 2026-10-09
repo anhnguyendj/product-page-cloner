@@ -1,0 +1,21 @@
+# store-specific config (never commit)
+store.json
+clone-config.json
+.env
+.env.*
+
+# work dirs and outputs
+work/
+out/
+*.jpg
+*.jpeg
+*.png
+
+# python
+__pycache__/
+*.pyc
+
+# chrome profiles used for CDP
+chrome-profile*/
+ppc-chrome*/
+*-chrome/

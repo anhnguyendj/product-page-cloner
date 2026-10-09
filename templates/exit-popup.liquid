@@ -1,0 +1,182 @@
+{%- comment -%}
+  product-page-cloner - optional exit-intent popup: EMAIL FOR A DISCOUNT CODE, code shown IMMEDIATELY + auto-applied.
+  Upload as sections/ppc-exit-popup.liquid and add it last in the product template:
+    "exit": {"type":"ppc-exit-popup","settings":{"brand":"<Your Brand>","code":"<CODE>","percent":10,"list":"<list id>","hide_group":""}}
+  Renders NOTHING unless both "brand" and "code" are set (no default brand, no default code).
+
+  Create BEFORE enabling (and confirm with the store owner - discounts are live immediately):
+    - a Shopify discount code (discountCodeBasicCreate, scoped to the product, once per customer,
+      combinesWith shipping only)
+    - an email list + an automation that emails the code to new subscribers (any ESP).
+  Email capture is ESP-agnostic: on submit the section dispatches
+    document 'ppc:lead' CustomEvent  { detail: { email, code, source } }
+  so any email platform can be wired in with a few lines. Klaviyo is built in as an OPTIONAL implementation:
+  set klaviyo_key (public site id / company_id - public, not a secret) and list -> client subscriptions API.
+  Consent text names the brand from the "brand" setting.
+
+  Triggers: desktop = mouse leaves through the top edge; phone = scrolled > 1200px then a fast swipe back up.
+  Not shown: first 8 seconds, already shown this session, visitor already identified by Klaviyo (when present).
+  Network error at the ESP -> still reveal the code (never punish the shopper for our failure).
+  hide_group: hides a variant group whose data-variant-name starts with this text, inside the Shadow DOM (use when
+  a group has a single value). Never delete the option on Shopify instead - it breaks variant matching.
+{%- endcomment -%}
+{%- assign code = section.settings.code | strip -%}
+{%- assign brand = section.settings.brand | strip -%}
+{%- if code != blank and brand != blank -%}
+<div id="ppc-exit" hidden data-code="{{ code | escape }}" data-hide="{{ section.settings.hide_group | escape }}"
+     data-kl="{{ section.settings.klaviyo_key | escape }}" data-list="{{ section.settings.list | escape }}">
+  <div class="ppc-ex-bg" data-close></div>
+  <div class="ppc-ex-card" role="dialog" aria-modal="true" aria-labelledby="ppc-ex-t">
+    <button type="button" class="ppc-ex-x" data-close aria-label="Close">&times;</button>
+    {%- if product.featured_image -%}
+      <img class="ppc-ex-img" src="{{ product.featured_image | image_url: width: 300 }}" alt="" width="110" height="110" loading="lazy">
+    {%- endif -%}
+    <p class="ppc-ex-top">Wait &mdash; before you go!</p>
+    <h3 id="ppc-ex-t">Get {{ section.settings.percent }}% off your order</h3>
+    <div class="ppc-ex-s1">
+      <p class="ppc-ex-txt">{{ section.settings.body }}</p>
+      <form class="ppc-ex-form" novalidate>
+        <input type="email" name="email" autocomplete="email" inputmode="email" placeholder="Enter your email" aria-label="Email" required>
+        <p class="ppc-ex-err" hidden>Please enter a valid email.</p>
+        <button type="submit" class="ppc-ex-btn">Reveal my {{ section.settings.percent }}% off</button>
+      </form>
+      <button type="button" class="ppc-ex-no" data-close>No thanks</button>
+      <p class="ppc-ex-small">By signing up you agree to receive marketing emails from {{ brand | escape }}. Unsubscribe anytime.</p>
+    </div>
+    <div class="ppc-ex-s2" hidden>
+      <div class="ppc-ex-code"><span>{{ code | escape }}</span><button type="button" class="ppc-ex-copy">Copy</button></div>
+      <p class="ppc-ex-done">&#10003; Applied! Your {{ section.settings.percent }}% off is saved for checkout.</p>
+      <button type="button" class="ppc-ex-btn" data-close>Continue shopping</button>
+      {%- if section.settings.small_print != blank -%}<p class="ppc-ex-small">{{ section.settings.small_print }}</p>{%- endif -%}
+    </div>
+  </div>
+</div>
+<style>
+  #ppc-exit{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Arial,Helvetica,sans-serif}
+  #ppc-exit[hidden],#ppc-exit [hidden]{display:none!important}
+  #ppc-exit .ppc-ex-bg{position:absolute;inset:0;background:rgba(0,0,0,.55);opacity:0;transition:opacity .2s}
+  #ppc-exit .ppc-ex-card{position:relative;width:100%;max-width:380px;background:#fff;border-radius:14px;padding:26px 22px 18px;text-align:center;color:#2f2a26;box-shadow:0 18px 50px rgba(0,0,0,.3);transform:translateY(16px) scale(.97);opacity:0;transition:all .22s}
+  #ppc-exit.open .ppc-ex-bg{opacity:1}
+  #ppc-exit.open .ppc-ex-card{transform:none;opacity:1}
+  #ppc-exit .ppc-ex-x{position:absolute;top:8px;right:10px;width:34px;height:34px;border:0;background:#f3f3f3;border-radius:50%;font-size:22px;line-height:34px;cursor:pointer;color:#555}
+  #ppc-exit .ppc-ex-img{width:110px;height:110px;object-fit:cover;border-radius:10px;margin:0 auto 10px;display:block}
+  #ppc-exit .ppc-ex-top{margin:0;font-size:15px;color:#b33a3a;font-weight:bold;letter-spacing:.5px}
+  #ppc-exit h3{margin:6px 0 8px;font-size:26px;line-height:1.2;color:#2f2a26}
+  #ppc-exit .ppc-ex-txt{margin:0 0 14px;font-size:16px;line-height:1.5;color:#5c534c}
+  #ppc-exit input[type=email]{width:100%;box-sizing:border-box;font-size:17px;padding:14px 12px;border:1.5px solid #cfc6bd;border-radius:8px;margin-bottom:10px;color:#2f2a26;background:#fff}
+  #ppc-exit input[type=email]:focus{outline:none;border-color:{{ section.settings.accent }}}
+  #ppc-exit .ppc-ex-err{margin:-4px 0 8px;font-size:14px;color:#c62828;text-align:left}
+  #ppc-exit .ppc-ex-code{display:flex;align-items:center;justify-content:space-between;border:2px dashed {{ section.settings.accent }};border-radius:8px;padding:8px 8px 8px 16px;margin:6px 0 12px;background:#fafafa}
+  #ppc-exit .ppc-ex-code span{font-size:22px;font-weight:bold;letter-spacing:2px;color:#2f2a26}
+  #ppc-exit .ppc-ex-copy{border:0;background:#2f2a26;color:#fff;border-radius:6px;padding:8px 14px;font-size:14px;cursor:pointer}
+  #ppc-exit .ppc-ex-btn{width:100%;border:0;background:{{ section.settings.accent }};color:#fff;font-size:18px;font-weight:bold;border-radius:8px;padding:15px 10px;cursor:pointer}
+  #ppc-exit .ppc-ex-btn:disabled{opacity:.7}
+  #ppc-exit .ppc-ex-done{margin:0 0 14px;font-size:16px;line-height:1.5;color:#2e7d32;font-weight:bold}
+  #ppc-exit .ppc-ex-no{margin-top:10px;border:0;background:none;color:#8a7c6d;font-size:14px;text-decoration:underline;cursor:pointer}
+  #ppc-exit .ppc-ex-small{margin:8px 0 0;font-size:12px;line-height:1.4;color:#9a8f85}
+</style>
+<script>
+(function () {
+  var el = document.getElementById('ppc-exit');
+  if (!el) return;
+  var CODE = el.dataset.code, HIDE = el.dataset.hide, KL = el.dataset.kl, LIST = el.dataset.list, KEY = 'ppc_exit_' + CODE;
+
+  if (HIDE) {   // hide a variant group (e.g. a size with a single value) inside the rebuilt page's Shadow DOM
+    var tries = 0, t = setInterval(function () {
+      var r = document.getElementById('ppc-root'), s = r && r.shadowRoot;
+      if (s && s.querySelector('.variant_select')) {
+        var st = document.createElement('style');
+        st.textContent = '.variant_select[data-variant-name^="' + HIDE.replace(/["\\]/g, '\\$&') + '"]{display:none!important}';
+        s.appendChild(st);
+        clearInterval(t);
+      }
+      if (++tries > 150) clearInterval(t);
+    }, 100);
+  }
+
+  function seen() { try { return sessionStorage.getItem(KEY); } catch (e) { return null; } }
+  function markSeen() { try { sessionStorage.setItem(KEY, '1'); } catch (e) {} }
+  // visitor already identified by Klaviyo (left an email elsewhere / came from an email) -> do not ask again
+  var known = false;
+  try {
+    if (window.klaviyo && klaviyo.isIdentified) klaviyo.isIdentified().then(function (v) { known = !!v; });
+  } catch (e) {}
+  var t0 = Date.now(), shown = false;
+  function show() {
+    if (shown || known || seen() || Date.now() - t0 < 8000) return;
+    shown = true; markSeen();
+    el.hidden = false;
+    requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('open'); }); });
+  }
+  function hide() {
+    el.classList.remove('open');
+    setTimeout(function () { el.hidden = true; }, 220);
+  }
+  el.addEventListener('click', function (e) { if (e.target.closest('[data-close]')) hide(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !el.hidden) hide(); });
+
+  document.addEventListener('mouseout', function (e) {
+    if (!e.relatedTarget && e.clientY <= 0) show();
+  });
+  var maxY = 0, lastY = 0, lastT = Date.now();
+  document.addEventListener('scroll', function (e) {
+    // Only the MAIN scroller (window, or a theme wrapper that scrolls); the gallery track also fires 'scroll'.
+    var tg = e.target === document ? document.scrollingElement : e.target;
+    if (!tg || tg.scrollHeight < window.innerHeight * 1.5 || (tg !== document.scrollingElement && tg.scrollWidth > tg.clientWidth + 2)) return;
+    var y = tg.scrollTop, now = Date.now();
+    if (y > maxY) maxY = y;
+    var v = (lastY - y) / Math.max(1, now - lastT);
+    if (maxY > 1200 && v > 2.2 && y < maxY - 500) show();
+    lastY = y; lastT = now;
+  }, { passive: true, capture: true });
+
+  function subscribe(email) {
+    try { document.dispatchEvent(new CustomEvent('ppc:lead', { detail: { email: email, code: CODE, source: 'ppc exit popup' } })); } catch (e) {}
+    if (!KL || !LIST) return Promise.resolve();
+    try { if (window.klaviyo && klaviyo.identify) klaviyo.identify({ email: email }); } catch (e) {}
+    return fetch('https://a.klaviyo.com/client/subscriptions?company_id=' + encodeURIComponent(KL), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/vnd.api+json', 'revision': '2024-10-15' },
+      body: JSON.stringify({ data: { type: 'subscription', attributes: {
+        custom_source: 'ppc exit popup ' + CODE,
+        profile: { data: { type: 'profile', attributes: { email: email } } } },
+        relationships: { list: { data: { type: 'list', id: LIST } } } } })
+    }).catch(function () {});
+  }
+  el.querySelector('.ppc-ex-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = this, o = f.email, b = f.querySelector('.ppc-ex-btn'), email = (o.value || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { f.querySelector('.ppc-ex-err').hidden = false; o.focus(); return; }
+    f.querySelector('.ppc-ex-err').hidden = true;
+    b.disabled = true; b.textContent = '...';
+    Promise.all([subscribe(email), fetch('/discount/' + encodeURIComponent(CODE), { credentials: 'same-origin' }).catch(function () {})])
+      .then(function () {
+        el.querySelector('.ppc-ex-s1').hidden = true;
+        el.querySelector('.ppc-ex-s2').hidden = false;
+      });
+  });
+  el.querySelector('.ppc-ex-copy').addEventListener('click', function () {
+    var b = this;
+    try { navigator.clipboard.writeText(CODE); } catch (e) {}
+    b.textContent = 'Copied!';
+    setTimeout(function () { b.textContent = 'Copy'; }, 1500);
+  });
+})();
+</script>
+{%- endif -%}
+{% schema %}
+{
+  "name": "PPC exit popup",
+  "settings": [
+    { "type": "text", "id": "brand", "label": "Brand name (required, used in the consent text)" },
+    { "type": "text", "id": "code", "label": "Discount code (required; create it in Shopify first)" },
+    { "type": "number", "id": "percent", "label": "Percent off", "default": 10 },
+    { "type": "text", "id": "body", "label": "Body text", "default": "Enter your email and we'll unlock your code right here." },
+    { "type": "text", "id": "small_print", "label": "Small print", "default": "One use per customer. Can't be combined with quantity savings; the better discount applies." },
+    { "type": "text", "id": "klaviyo_key", "label": "Klaviyo public site ID (optional)" },
+    { "type": "text", "id": "list", "label": "Klaviyo list ID (optional)" },
+    { "type": "text", "id": "hide_group", "label": "Hide variant group starting with (optional)" },
+    { "type": "color", "id": "accent", "label": "Accent", "default": "#fb8c00" }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,38 @@
+{%- comment -%}
+  product-page-cloner - "You May Also Like" at the bottom of a cloned product page.
+  Upload as sections/ppc-related.liquid. Products come from the product metafield ppc.related
+  (type list.product_reference) -> add/remove products with metafieldsSet, no theme edit. Empty = section hidden.
+{%- endcomment -%}
+{%- assign items = product.metafields.ppc.related.value -%}
+{%- if items and items.size > 0 -%}
+<div class="ppc-rel">
+  <h2 class="ppc-rel-h">{{ section.settings.heading | default: 'You May Also Like' }}</h2>
+  <div class="ppc-rel-g">
+    {%- for p in items -%}
+      {%- assign v = p.selected_or_first_available_variant -%}
+      <a class="ppc-rel-c" href="{{ p.url }}">
+        <span class="ppc-rel-i">{{ p.featured_image | image_url: width: 600 | image_tag: loading: 'lazy', alt: p.title, sizes: '(max-width: 749px) 50vw, 25vw' }}
+          {%- if v.compare_at_price > v.price -%}<span class="ppc-rel-b">-{{ v.compare_at_price | minus: v.price | times: 100.0 | divided_by: v.compare_at_price | round }}%</span>{%- endif -%}</span>
+        <span class="ppc-rel-t">{{ p.title }}</span>
+        <span class="ppc-rel-p"><b>{{ v.price | money }}</b>{%- if v.compare_at_price > v.price -%}<s>{{ v.compare_at_price | money }}</s>{%- endif -%}</span>
+      </a>
+    {%- endfor -%}
+  </div>
+</div>
+<style>
+.ppc-rel{max-width:1180px;margin:10px auto 60px;padding:0 24px;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;color:#2f2f2f}
+.ppc-rel-h{font-size:22px;font-weight:700;text-align:center;margin:0 0 22px;letter-spacing:.3px}
+.ppc-rel-g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}
+.ppc-rel-c{display:flex;flex-direction:column;gap:8px;text-decoration:none;color:inherit}
+.ppc-rel-i{position:relative;display:block;aspect-ratio:1/1;overflow:hidden;border-radius:5px;background:#f3f3f3}
+.ppc-rel-i img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s}
+.ppc-rel-c:hover .ppc-rel-i img{transform:scale(1.04)}
+.ppc-rel-b{position:absolute;top:8px;left:8px;background:#d0021b;color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:3px}
+.ppc-rel-t{font-size:14px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ppc-rel-p b{color:#d0021b;font-size:16px;font-weight:700;margin-right:8px}.ppc-rel-p s{color:#999;font-size:13px}
+@media (max-width:749px){.ppc-rel{padding:0 16px;margin-bottom:90px}.ppc-rel-g{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ppc-rel-h{font-size:19px}}
+</style>
+{%- endif -%}
+{% schema %}
+{"name":"PPC related products","settings":[{"type":"text","id":"heading","label":"Heading","default":"You May Also Like"}]}
+{% endschema %}

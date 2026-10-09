@@ -1,0 +1,40 @@
+{
+  "_comment": "Copy to store.json (gitignored) in the skill root or in a work dir. Store-specific facts live ONLY here, never in SKILL.md / LEARNINGS.md / CASES.md. Keys starting with _ are notes.",
+
+  "shop_domain": "your-store.myshopify.com",
+  "_shop_domain": "The myshopify domain (Admin API host). Preview links can use your public domain instead.",
+
+  "public_domain": "www.example.com",
+  "_public_domain": "Customer-facing domain used for preview links: https://<public_domain>/products/<handle>?preview_theme_id=<id>",
+
+  "brand_name": "Your Brand",
+  "_brand_name": "Used in the exit popup consent text and anywhere the page names the seller. Never the reference store's name.",
+
+  "location_gid": "gid://shopify/Location/0000000000",
+  "_location_gid": "Fulfillment location for delivery profiles. Discover: query { locations(first: 10) { nodes { id name isActive } } }",
+
+  "online_store_publication_gid": "gid://shopify/Publication/0000000000",
+  "_online_store_publication_gid": "Discover: query { publications(first: 20) { nodes { id name } } } -> the one named 'Online Store'.",
+
+  "insurance_product_handle": "",
+  "_insurance_product_handle": "Optional. Handle of the hidden 'Shipping Insurance' product (stage 9). Blank = no insurance row in the cart drawer.",
+
+  "insurance_percent": 5,
+  "_insurance_percent": "Insurance price per item = round(percent x item price). One insurance variant per price point.",
+
+  "klaviyo_public_key": "",
+  "_klaviyo_public_key": "Optional. Klaviyo public site ID (company_id) for the exit popup. Public value, not a secret API key. Never put private API keys in this file.",
+
+  "theme_name_prefix": "PPC",
+  "_theme_name_prefix": "Duplicated draft themes are named '<prefix> <product> v<N> <change>' so they are easy to find and clean up.",
+
+  "prefix": "ppc",
+  "_prefix": "File-name prefix for per-clone theme files (sections/<prefix>-<slug>.liquid, snippets, template suffix). Shared files (ppc-cart-drawer, ppc-related, ppc-exit-popup, ppc-announcement-bar) keep 'ppc'. Change only if 'ppc-' collides with existing theme files; the announcement bar checks template.suffix contains 'ppc-'.",
+
+  "volume_discount_exclusion_tag": "",
+  "_volume_discount_exclusion_tag": "Optional. If the store already runs a store-wide quantity discount on a smart collection, the tag that excludes a product from it (so it does not override the clone's own tiers).",
+
+  "sku_prefix": "PPC",
+  "product_tag": "ppc-clone",
+  "_product_tag": "Tag on every cloned product - used to list them (e.g. for related products) and to clean up later."
+}

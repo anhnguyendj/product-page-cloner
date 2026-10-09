@@ -1,0 +1,422 @@
+{%- comment -%}
+  product-page-cloner - slide-in cart drawer. Upload as sections/ppc-cart-drawer.liquid (shared by every cloned product).
+  Per-product settings come from the product template JSON (build_section.py fills them from store.json):
+    insurance_handle   handle of the hidden "Shipping Insurance" product (blank = no insurance row)
+    insurance_percent  % of each item's price (one insurance variant per price point; see SKILL.md stage 9)
+    tiers              default quantity tiers "qty:%,qty:%" when the page has no mix & match tiers
+  What it does:
+  - Renders IMMEDIATELY from local data (predicts tier prices exactly like Shopify), then syncs with the server in
+    the background through a queue -> no waiting, no dimming.
+  - Intercepts the rebuilt page's ADD TO CART / "Buy N" / BUY IT NOW / sticky-bar buttons in the CAPTURE phase on the
+    shadow root.
+  - Phone (<750px): full-screen drawer; desktop: 400px panel on the right.
+  - Generic sticky add-to-cart bar ONLY when the reference page has no sticky bar of its own.
+  No fabricated social proof: no "recently purchased" popups, no fake scarcity badges.
+{%- endcomment -%}
+{%- if section.settings.insurance_handle != blank -%}{%- assign ins_p = all_products[section.settings.insurance_handle] -%}{%- endif -%}
+<script>
+(function () {
+  var host = document.getElementById('ppc-root');
+  if (!host || !host.shadowRoot || window.__ppcDrawer) return;
+  window.__ppcDrawer = 1;
+  var src = host.shadowRoot;
+  // Product + every variant. Selected variant = data-variant on #ppc-root (the page runtime updates it).
+  // Variant images are FIXED Liquid URLs (the /cart.js image URL differs -> would reload and flicker).
+  var PID = {{ product.id | json }}, MULTI = {{ product.has_only_default_variant | json }} ? false : true;
+  var P = { title: {{ product.title | json }}, image: {{ product.featured_image | image_url: width: 200 | prepend: 'https:' | json }} };
+  var VARS = {};
+  {%- for x in product.variants %}
+  VARS[{{ x.id }}] = { price: {{ x.price | json }}, cmp: {{ x.compare_at_price | default: 0 | json }}, name: {{ x.title | json }},
+    image: {{ x.image | default: product.featured_image | image_url: width: 200 | prepend: 'https:' | json }} };
+  {%- endfor %}
+  function curV() { var v = +host.getAttribute('data-variant'); return VARS[v] ? v : +Object.keys(VARS)[0]; }
+  // Insurance: hidden product, one variant per price point. Price for 1 item = round(INS_PCT% x item price).
+  // A missing price point -> add a variant to the insurance product (no code change).
+  var INS_PCT = {{ section.settings.insurance_percent | default: 5 | json }};
+  var INS_TITLE = {{ ins_p.title | default: 'Shipping Insurance' | json }};
+  var INSV = [{%- if ins_p -%}{%- for x in ins_p.variants -%}{ id: {{ x.id }}, price: {{ x.price }} }{%- unless forloop.last -%},{%- endunless -%}{%- endfor -%}{%- endif -%}];
+  var INS_IDS = INSV.map(function (x) { return x.id; });
+  function insFor(price) { var c = Math.round(price * INS_PCT / 100); return INSV.filter(function (x) { return x.price === c; })[0]; }
+  // Tiers: from data-tiers on #ppc-root when the page has mix & match, else the section setting "qty:%,qty:%".
+  var TT = null; try { TT = JSON.parse(host.getAttribute('data-tiers') || 'null'); } catch (e) {}
+  var DEF = String({{ section.settings.tiers | default: '2:5,3:10,4:20' | json }}).split(',').map(function (s) {
+    var p = s.split(':'); return [+p[0], +p[1]];
+  }).filter(function (t) { return t[0] > 0 && t[1] > 0; });
+  var TIERS = TT ? TT.filter(function (t) { return t[1] > 0; }).map(function (t) { return [t[0], t[1]]; }) : DEF;
+  // "Add another style" strip (multi-style products only): single styles = price <= 2x cheapest (excludes bundles)
+  var GMIN = Math.min.apply(null, Object.keys(VARS).map(function (k) { return VARS[k].price; }));
+  var SINGLES = Object.keys(VARS).filter(function (k) { return VARS[k].price <= GMIN * 2; }).map(Number);
+  var MIX = MULTI && SINGLES.length > 1;
+  var WARN = {{ section.settings.warn | json }};
+  var TIP = {{ section.settings.tip | json }};
+  var ACCENT = {{ section.settings.accent | default: '#fb8c00' | json }};
+
+  var dh = document.createElement('div');
+  dh.id = 'ppc-drawer-host';
+  document.body.appendChild(dh);
+  var d = dh.attachShadow({ mode: 'open' });
+  d.innerHTML = '<style>' +
+    ':host{all:initial}*{box-sizing:border-box;font-family:-apple-system,"Segoe UI",Roboto,sans-serif}[hidden]{display:none!important}' +
+    '.ov{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .25s ease-out;z-index:2147483000;will-change:opacity}' +
+    '.pn{position:fixed;top:0;right:0;height:100%;width:400px;max-width:88vw;background:#fff;transform:translate3d(100%,0,0);transition:transform .28s cubic-bezier(.25,.46,.45,.94);contain:layout paint;z-index:2147483001;display:flex;flex-direction:column;color:#2f2f2f;will-change:transform}' +
+    '.open .ov{opacity:1;pointer-events:auto}.open .pn{transform:none}' +
+    '.hd{position:relative;padding:18px 16px 14px;text-align:center;font-size:20px;letter-spacing:.5px;border-bottom:1px solid #e5e5e5;margin:0 10px}' +
+    '.x{position:absolute;left:4px;top:14px;width:28px;height:28px;border:1.5px solid #333;border-radius:50%;background:none;cursor:pointer;font-size:15px;line-height:24px;padding:0;color:#333}' +
+    '.tip{margin:14px 10px 6px;background:#f5f5f5;padding:10px 14px;font-size:14px;line-height:1.45;display:flex;gap:10px;align-items:flex-start}.tip svg{flex:0 0 18px;margin-top:2px}' +
+    '.bd{flex:1;overflow-y:auto;padding:6px 10px;overscroll-behavior:contain}' +
+    '.it{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #f0f0f0}' +
+    '.it img{width:90px;height:90px;object-fit:cover;flex:0 0 90px;background:#f3f3f3}' +
+    '.inf{flex:1;min-width:0}.nm{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px}' +
+    '.vt{font-size:12px;color:#777;margin:-4px 0 8px}' +
+    '.row{display:flex;justify-content:space-between;align-items:center}' +
+    '.q{display:flex;border:1px solid #ddd}.q button{width:32px;height:30px;border:0;background:#fff;font-size:18px;cursor:pointer;color:#333;padding:0}.q span{width:32px;height:30px;line-height:30px;text-align:center;border-left:1px solid #ddd;border-right:1px solid #ddd;font-size:13px}' +
+    '.pr{color:#d0021b;font-size:15px}.rm{display:inline-block;margin-top:8px;font-size:12px;text-decoration:underline;cursor:pointer;color:#333}' +
+    '.ft{padding:12px 10px 16px;box-shadow:0 -2px 8px rgba(0,0,0,.06);background:#fff}' +
+    '.tt{display:flex;justify-content:space-between;font-size:15px;margin-bottom:12px}.tt b{color:#d0021b;font-weight:400}' +
+    '.tt.sum{border-top:1px solid #e5e5e5;padding-top:14px;margin-top:4px}.tt.sum span,.tt.sum b{font-weight:700}' +
+    '.ins{display:flex;align-items:center;gap:8px;font-size:14px;margin:2px 0 12px;position:relative}' +
+    '.ins input{appearance:none;-webkit-appearance:none;width:20px;height:20px;margin:0;border:1.5px solid #bbb;border-radius:3px;cursor:pointer;flex:0 0 20px;position:relative;background:#fff}' +
+    '.ins input:checked{background:' + ACCENT + ';border-color:' + ACCENT + '}.ins input:checked::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}' +
+    '.ins label{cursor:pointer}.ins .ip{color:#7a9a3a}' +
+    '.qm{width:16px;height:16px;border-radius:50%;background:#555;color:#fff;font-size:11px;line-height:16px;text-align:center;cursor:pointer;flex:0 0 16px;font-weight:700}' +
+    '.bub{position:absolute;left:0;right:0;bottom:30px;background:#333;color:#fff;font-size:12px;line-height:1.4;padding:8px 10px;border-radius:4px}' +
+    '.warn{background:#fff7ed;border:1px solid #f5c38a;color:#7a4a12;font-size:13px;line-height:1.45;padding:10px 12px;margin:-4px 0 12px}' +
+    '.warn button{display:block;margin:8px 0 0 auto;border:0;background:' + ACCENT + ';color:#fff;padding:4px 16px;cursor:pointer;font-size:13px}' +
+    '.co{display:block;width:100%;height:48px;border:0;background:' + ACCENT + ';color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px}' +
+    '.em{padding:40px 10px;text-align:center;color:#888}' +
+    '.more{margin:14px 0 8px;padding:12px;border:1px dashed #92a542;border-radius:8px;background:rgba(146,165,66,.08)}' +
+    '.more h4{margin:0 0 10px;font-size:14px;font-weight:700}.more h4 em{font-style:normal;color:#d0021b}' +
+    '.strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}' +
+    '.card{flex:0 0 86px;text-align:center;font-size:11px;line-height:1.25;position:relative}' +
+    '.card img{width:86px;height:86px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;margin-bottom:4px;background:#f3f3f3}' +
+    '.card .cn{height:28px;overflow:hidden}' +
+    '.card button{margin-top:4px;width:100%;height:28px;border:1px solid #92a542;background:#fff;color:#7a8c33;border-radius:4px;font-weight:700;font-size:12px;cursor:pointer}' +
+    '.card button:active{background:#92a542;color:#fff}' +
+    '.card .ok{position:absolute;top:4px;right:4px;background:#92a542;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px}' +
+    // phone: full-screen drawer (desktop keeps the 400px right panel)
+    '@media (max-width:749px){.pn{width:100%;max-width:100%;height:auto;bottom:0}}' +
+    '</style><div class="w"><div class="ov"></div><div class="pn"><div class="hd"><button class="x" aria-label="Close">&#x2715;</button>YOUR CART</div>' +
+    '<div class="tip" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="1.8" stroke-linejoin="round"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z"/><circle cx="8" cy="8" r="1.6"/></svg><span class="tx"></span></div>' +
+    '<div class="bd"><div class="lst"></div><div class="more" hidden><h4></h4><div class="strip"></div></div></div><div class="ft">' +
+    '<div class="tt st"><span>Subtotal</span><b class="sub"></b></div><div class="tt dc" hidden><span>Discount</span><b class="dis"></b></div>' +
+    '<div class="ins" hidden><input type="checkbox" id="ppc-ins" checked><label for="ppc-ins">Add Shipping Insurance to your order <span class="ip"></span></label><span class="qm">?</span><div class="bub" hidden></div></div>' +
+    '<div class="warn" hidden><span></span><button type="button">OK</button></div>' +
+    '<div class="tt sum"><span>Total</span><b class="tot"></b></div>' +
+    '<button class="co">CHECK OUT</button></div></div></div>';
+  function $(s) { return d.querySelector(s); }
+  var w = $('.w'), bd = $('.lst'), more = $('.more'), tip = $('.tip'), tot = $('.tot'), tx = $('.tip .tx');
+  var sub = $('.sub'), dis = $('.dis'), dc = $('.dc'), st = $('.st');
+  var insRow = $('.ins'), insBox = $('#ppc-ins'), insPrice = $('.ins .ip'), bub = $('.bub'), warn = $('.warn');
+  bub.textContent = TIP; warn.querySelector('span').textContent = WARN;
+  function money(c) { return '$ ' + (c / 100).toFixed(2); }
+
+  // lock page scroll while open; open with 2 rAF ticks so the very first open still slides in
+  var html = document.documentElement, isOpen = false, prevOverflow = '';
+  function openDrawer() {
+    if (isOpen) return; isOpen = true;
+    prevOverflow = html.style.overflow; html.style.overflow = 'hidden';
+    requestAnimationFrame(function () { requestAnimationFrame(function () { w.classList.add('open'); }); });
+  }
+  function closeDrawer() {
+    if (!isOpen) return; isOpen = false;
+    w.classList.remove('open'); html.style.overflow = prevOverflow;
+  }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDrawer(); });
+  $('.ov').onclick = closeDrawer;
+  $('.x').onclick = closeDrawer;
+
+  // remember an un-ticked insurance box for this session
+  var wantIns = true;
+  try { wantIns = sessionStorage.getItem('ppc-ins') !== '0'; } catch (e) {}
+  if (!INSV.length) wantIns = false;
+  insBox.checked = wantIns;
+
+  // current cart: fetched on page load so a click can render instantly
+  var cart = { items: [] }, pending = 0, chain = Promise.resolve();
+  fetch('/cart.js').then(function (r) { return r.json(); }).then(function (c) { if (!pending) cart = c; });
+
+  function isProd(i) { return i.product_id === PID || !!VARS[i.variant_id]; }
+  function isIns(i) { return INS_IDS.indexOf(i.variant_id) > -1; }
+  function line(id) { return cart.items.filter(function (i) { return i.variant_id === id; })[0]; }
+  // tiers count the TOTAL quantity of this product (all variants), like a Shopify automatic discount
+  function prodQty() { return cart.items.reduce(function (s, i) { return isProd(i) ? s + i.quantity : s; }, 0); }
+  function pctFor(q) { var pct = 0; TIERS.forEach(function (t) { if (q >= t[0]) pct = t[1]; }); return pct; }
+  function setLine(id, q, mk) {
+    var it = line(id);
+    if (!it && q > 0) { it = mk(); cart.items[VARS[id] ? 'unshift' : 'push'](it); }
+    if (!it) return;
+    if (q <= 0) { cart.items = cart.items.filter(function (i) { return i !== it; }); return; }
+    it.quantity = q;
+  }
+  // insurance needed per price point: every product unit needs 1 insurance unit at its own price
+  function insNeeded() {
+    var need = {};
+    INSV.forEach(function (x) { need[x.id] = 0; });
+    if (wantIns) cart.items.forEach(function (i) {
+      if (!isProd(i)) return;
+      var b = insFor(VARS[i.variant_id] ? VARS[i.variant_id].price : i.original_price);
+      if (b) need[b.id] += i.quantity;
+    });
+    return need;
+  }
+  // predict prices: % off by total quantity, each unit discounted by floor(price * %) cents (Shopify's rounding)
+  function recompute() {
+    var pct = pctFor(prodQty());
+    cart.items.forEach(function (i) {
+      if (!isProd(i) || !VARS[i.variant_id]) return;
+      var g = VARS[i.variant_id].price;
+      i.original_price = g; i.original_line_price = i.quantity * g;
+      i.final_line_price = i.quantity * (g - Math.floor(g * pct / 100));
+    });
+    var need = insNeeded();
+    INSV.forEach(function (x) {
+      setLine(x.id, need[x.id], function () { return { key: '', variant_id: x.id, product_title: INS_TITLE }; });
+      var b = line(x.id);
+      if (b) { b.final_line_price = b.original_line_price = b.quantity * x.price; b.original_price = x.price; }
+    });
+    cart.total_price = cart.items.reduce(function (s, i) { return s + (i.final_line_price || 0); }, 0);
+  }
+  function setQtyLocal(vid, q) {
+    setLine(vid, q, function () {
+      return { key: '', variant_id: vid, product_id: PID, product_title: P.title, variant_title: VARS[vid].name, image: VARS[vid].image };
+    });
+    recompute();
+  }
+
+  function render() {
+    var q = prodQty();
+    var next = TIERS.filter(function (t) { return q < t[0]; })[0];
+    var got = TIERS.filter(function (t) { return q >= t[0]; }).pop();
+    tip.hidden = !q || !TIERS.length;
+    if (q && TIERS.length) tx.textContent = next ? (got ? 'Save ' + got[1] + '% already! ' : '') + 'Buy ' + (next[0] - q) + ' more item(s) and save ' + next[1] + '%'
+                                                 : "Congratulations! You've saved " + got[1] + '%!';
+    var rows = cart.items.filter(function (i) { return !isIns(i); });
+    renderMore(q, next);
+    if (!rows.length) {
+      if (!bd.querySelector('.em')) bd.innerHTML = '<div class="em">Your cart is empty</div>';
+      totals(); return;
+    }
+    // keep existing elements, only update text/numbers -> images do not reload, nothing jumps.
+    // rows are matched by variant_id (Shopify's real line key only exists after the server answers)
+    var want = rows.map(function (i) { return String(i.variant_id); });
+    var have = Array.prototype.map.call(bd.querySelectorAll('.it'), function (el) { return el.getAttribute('data-v'); });
+    if (want.join() !== have.join()) {
+      bd.innerHTML = '';
+      rows.forEach(function () {
+        var el = document.createElement('div'); el.className = 'it';
+        el.innerHTML = '<img alt=""><div class="inf"><div class="nm"></div><div class="vt"></div>' +
+          '<div class="row"><div class="q"><button data-a="-1">&minus;</button><span></span><button data-a="1">+</button></div>' +
+          '<span class="pr"></span></div><span class="rm" data-a="0">REMOVE</span></div>';
+        bd.appendChild(el);
+      });
+    }
+    Array.prototype.forEach.call(bd.querySelectorAll('.it'), function (el, n) {
+      var i = rows[n], mine = isProd(i), V = VARS[i.variant_id];
+      // this product always uses the fixed per-variant image URL -> the URL does not change after the server answers
+      var img = V ? V.image : (i.image ? i.image + (i.image.indexOf('?') > -1 ? '&' : '?') + 'width=200' : '');
+      el.setAttribute('data-v', i.variant_id); el.setAttribute('data-k', i.key || ''); el.setAttribute('data-q', i.quantity);
+      var im = el.querySelector('img'); if (img && im.getAttribute('src') !== img) im.setAttribute('src', img);
+      el.querySelector('.nm').textContent = i.product_title || '';
+      var vt = el.querySelector('.vt'), name = V ? V.name : (i.variant_title || '');
+      vt.textContent = name; vt.hidden = !(MULTI && mine && name) && !(!mine && name && name !== 'Default Title');
+      el.querySelector('.q span').textContent = i.quantity;
+      el.querySelector('.pr').textContent = money(V ? V.price : i.original_price);
+    });
+    totals();
+  }
+  // strip of single styles; "+ ADD" adds 1 (cards are kept, only text changes -> images do not reload)
+  var strip = $('.strip');
+  if (MIX) strip.innerHTML = SINGLES.map(function (id) {
+    return '<div class="card" data-v="' + id + '"><span class="ok" hidden></span><img alt="" src="' + VARS[id].image + '"><div class="cn"></div><button type="button">+ ADD</button></div>';
+  }).join('');
+  Array.prototype.forEach.call(strip.querySelectorAll('.card'), function (c) { c.querySelector('.cn').textContent = VARS[+c.getAttribute('data-v')].name.split(' / ')[0]; });
+  function renderMore(q, next) {
+    more.hidden = !(MIX && q);
+    if (more.hidden) return;
+    more.querySelector('h4').innerHTML = next ? 'Add another style — <em>save ' + next[1] + '%</em> with ' + (next[0] - q) + ' more' : 'Add another style';
+    Array.prototype.forEach.call(strip.querySelectorAll('.card'), function (c) {
+      var it = line(+c.getAttribute('data-v')), ok = c.querySelector('.ok');
+      ok.hidden = !it; if (it) ok.textContent = '✓ x' + it.quantity;
+    });
+  }
+  strip.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var vid = +b.closest('.card').getAttribute('data-v'), cur = line(vid);
+    setQtyLocal(vid, (cur ? cur.quantity : 0) + 1); render(); addLine(vid, 1);
+  });
+
+  // footer: Subtotal (full price) - Discount + insurance = Total
+  function totals() {
+    var q = prodQty(), ins = 0, insCalc = 0;
+    cart.items.forEach(function (i) { if (isIns(i)) ins += i.final_line_price || 0; });
+    cart.items.forEach(function (i) {
+      if (!isProd(i)) return;
+      var b = insFor(VARS[i.variant_id] ? VARS[i.variant_id].price : i.original_price);
+      if (b) insCalc += b.price * i.quantity;
+    });
+    var full = cart.items.reduce(function (s, i) { return isIns(i) ? s : s + (i.original_line_price || 0); }, 0);
+    var total = cart.total_price || 0, off = full + ins - total;
+    sub.textContent = money(full);
+    st.hidden = dc.hidden = !(off > 0);
+    dis.textContent = '- ' + money(off);
+    insRow.hidden = !(INSV.length && q && insCalc);
+    insPrice.textContent = money(insCalc);
+    insBox.checked = wantIns;
+    tot.textContent = money(total);
+  }
+
+  function post(url, body) {
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { if (!r.ok) throw r; return r; });
+  }
+  // send to the server through a queue; only re-render with real numbers when nothing else is pending
+  function sync(job) {
+    pending++;
+    chain = chain.then(job).then(function () { return fetch('/cart.js'); })
+      .then(function (r) { return r.json(); })
+      .then(function (c) {
+        if (--pending) return;
+        cart = c; render();
+        // self-heal: insurance quantity per price point always equals product quantity (when ticked)
+        var need = insNeeded(), off = INSV.some(function (x) { var b = line(x.id); return (b ? b.quantity : 0) !== need[x.id]; });
+        if (INSV.length && off) pushUpdate({});
+      })
+      .catch(function () {
+        if (--pending === 0) fetch('/cart.js').then(function (r) { return r.json(); }).then(function (c) { cart = c; render(); });
+        if (window.console) console.warn('ppc cart sync failed');
+      });
+    return chain;
+  }
+  // push product quantities (u: {variant: qty}) + insurance per price point in ONE /cart/update.js call
+  function pushUpdate(u) {
+    var need = insNeeded();
+    INSV.forEach(function (x) { u[x.id] = need[x.id]; });
+    return sync(function () { return post('/cart/update.js', { updates: u }); });
+  }
+  // add n (relative, never absolute -> no lost items if the initial cart fetch has not finished)
+  function addLine(vid, n) {
+    var it = [{ id: vid, quantity: n }], b = insFor(VARS[vid].price);
+    if (wantIns && b) it.push({ id: b.id, quantity: n });
+    return sync(function () { return post('/cart/add.js', { items: it }); });
+  }
+  // add several variants at once (mix & match): list = [[variant, qty], ...] -> one /cart/add.js incl. insurance
+  function addMany(list) {
+    // MERGE by id: if items contain duplicate ids (e.g. 3 insurance lines with the same variant) Shopify does NOT
+    // emit product_added_to_cart, so the Meta pixel loses AddToCart even though the cart is correct.
+    var merged = {}, order = [];
+    var plus = function (id, n) { if (!merged[id]) { merged[id] = 0; order.push(id); } merged[id] += n; };
+    list.forEach(function (x) {
+      var cur = line(x[0]); setQtyLocal(x[0], (cur ? cur.quantity : 0) + x[1]);
+      plus(x[0], x[1]);
+      var b = insFor(VARS[x[0]].price); if (wantIns && b) plus(b.id, x[1]);
+    });
+    var it = order.map(function (id) { return { id: +id, quantity: merged[id] }; });
+    render(); openDrawer();
+    return sync(function () { return post('/cart/add.js', { items: it }); });
+  }
+  function add(n) {
+    if (host.__ppcMix) return addMany(host.__ppcMix());
+    var vid = curV(), cur = line(vid);
+    setQtyLocal(vid, (cur ? cur.quantity : 0) + n); render(); openDrawer();
+    return addLine(vid, n);
+  }
+  bd.addEventListener('click', function (e) {
+    var a = e.target.getAttribute('data-a'); if (a === null) return;
+    var it = e.target.closest('.it'), q = +it.getAttribute('data-q'), vid = +it.getAttribute('data-v');
+    var nq = a === '0' ? 0 : Math.max(0, q + (+a));
+    if (VARS[vid]) { setQtyLocal(vid, nq); render(); var u = {}; u[vid] = nq; pushUpdate(u); }
+    else sync(function () { return post('/cart/change.js', { id: it.getAttribute('data-k'), quantity: nq }); });
+  });
+  insBox.addEventListener('change', function () {
+    wantIns = insBox.checked;
+    try { sessionStorage.setItem('ppc-ins', wantIns ? '1' : '0'); } catch (e) {}
+    warn.hidden = wantIns || !WARN;
+    recompute(); render(); pushUpdate({});
+  });
+  warn.querySelector('button').onclick = function () { warn.hidden = true; };
+  $('.qm').onclick = function () { bub.hidden = !bub.hidden; };
+  $('.qm').onmouseenter = function () { bub.hidden = false; };
+  $('.qm').onmouseleave = function () { bub.hidden = true; };
+  $('.co').onclick = function () {
+    chain.then(function () { location.href = '/checkout'; });
+  };
+
+  // ===== Generic sticky ADD TO CART bar (only when the reference page has NO sticky bar of its own) =====
+  // Shows once the main buy button has scrolled out of view. Desktop: image + title + price + button;
+  // phone: one full-width button.
+  var CART = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 8H6.2"/><circle cx="9" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>';
+  var ex = document.createElement('div');
+  ex.innerHTML = '<style>' +
+    '.sb{position:fixed;left:0;right:0;bottom:0;z-index:2147482000;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.08);transform:translate3d(0,110%,0);transition:transform .25s ease-out}' +
+    '.sb.on{transform:none}' +
+    '.sbi{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:18px;padding:0 20px;height:98px}' +
+    '.sbm{width:68px;height:68px;object-fit:cover;flex:0 0 68px}' +
+    '.sbt{flex:1;min-width:0;font-size:15px;color:#2f2f2f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.sbp{white-space:nowrap}.sbp b{color:#d0021b;font-size:28px;font-weight:400;margin-right:12px}.sbp s{color:#999;font-size:15px}' +
+    '.sbb{height:48px;padding:0 30px;border:0;background:' + ACCENT + ';color:#fff;font-size:15px;letter-spacing:.4px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;margin-left:8px;flex:0 0 auto}' +
+    '@media (max-width:749px){.sbi{padding:0;height:auto;gap:0}.sbm,.sbt,.sbp{display:none}.sbb{flex:1;height:56px;margin:0;font-size:16px}}' +
+    '</style>' +
+    '<div class="sb"><div class="sbi"><img class="sbm" alt=""><div class="sbt"></div><div class="sbp"><b></b><s></s></div>' +
+    '<button class="sbb" type="button">' + CART + 'ADD TO CART</button></div></div>';
+  d.appendChild(ex);
+  function price$(c) { return '$' + (c / 100).toFixed(2); }
+  var sb = ex.querySelector('.sb');
+  ex.querySelector('.sbt').textContent = P.title;
+  function barFollowVariant() {
+    var V = VARS[curV()];
+    ex.querySelector('.sbm').src = V.image;
+    ex.querySelector('.sbp b').textContent = price$(V.price);
+    ex.querySelector('.sbp s').textContent = V.cmp > V.price ? price$(V.cmp) : '';
+  }
+  barFollowVariant();
+  host.addEventListener('ppc:variant', barFollowVariant);
+  ex.querySelector('.sbb').onclick = function () { add(pageQty()); };
+  var mainBtn = src.querySelector('.product_single_add_button');
+  // the page KEEPS the reference store's own sticky bar ([data-ppc="sticky"]) -> this generic one stays hidden
+  var ownBar = src.querySelector('[data-ppc="sticky"]');
+  function checkBar() {
+    var r = mainBtn && mainBtn.getBoundingClientRect();
+    sb.classList.toggle('on', !ownBar && !!r && r.bottom < 0);
+  }
+  // some themes scroll inside a wrapper element on desktop, not the window -> catch every scroll (capture phase)
+  document.addEventListener('scroll', checkBar, { passive: true, capture: true });
+  window.addEventListener('resize', checkBar); checkBar();
+
+  function pageQty() { var x = src.querySelector('.product_qty_num'); var n = parseInt(x && x.value, 10); return n > 0 ? n : 1; }
+  src.addEventListener('click', function (e) {
+    var bun = e.target.closest && e.target.closest('[data-ppc="bundle"]');
+    if (bun) { e.preventDefault(); e.stopPropagation(); addMany([[+bun.getAttribute('data-v'), 1]]); return; }
+    var b = e.target.closest && e.target.closest('button');
+    if (!b) return;
+    if (b.classList.contains('product_single_add_button')) {
+      e.preventDefault(); e.stopPropagation(); add(pageQty());
+    } else if (b.getAttribute('data-ppc') === 'sticky-atc') {
+      // the reference store's own sticky bar button: add 1 of the selected variant (like theirs), ignores mix tiers
+      e.preventDefault(); e.stopPropagation();
+      var v1 = curV(), c1 = line(v1);
+      setQtyLocal(v1, (c1 ? c1.quantity : 0) + 1); render(); openDrawer(); addLine(v1, 1);
+    } else if (b.getAttribute('data-ppc') === 'buynow') {
+      // buy now: add (incl. insurance when ticked) then go to checkout
+      e.preventDefault(); e.stopPropagation();
+      b.disabled = true;
+      (host.__ppcMix ? addMany(host.__ppcMix()) : addLine(curV(), pageQty())).then(function () { location.href = '/checkout'; });
+    } else if (b.closest('.couponItem')) {
+      var m = (b.closest('.couponItem').textContent || '').match(/Buy\s+(\d+)/i);
+      if (m) { e.preventDefault(); e.stopPropagation(); add(+m[1]); }
+    }
+  }, true);
+})();
+</script>
+{% schema %}
+{
+  "name": "PPC cart drawer",
+  "settings": [
+    { "type": "text", "id": "insurance_handle", "label": "Shipping insurance product handle (blank = off)" },
+    { "type": "number", "id": "insurance_percent", "label": "Insurance % of item price", "default": 5 },
+    { "type": "text", "id": "tiers", "label": "Quantity tiers qty:% (used when the page has no mix & match tiers)", "default": "2:5,3:10,4:20" },
+    { "type": "text", "id": "tip", "label": "Insurance tooltip", "default": "Shipping insurance protects your order against loss or damage in transit." },
+    { "type": "text", "id": "warn", "label": "Message when insurance is unticked", "default": "Without shipping insurance we cannot replace items that are lost or damaged in transit." },
+    { "type": "color", "id": "accent", "label": "Accent (checkout button)", "default": "#fb8c00" }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,30 @@
+{% comment %}
+  product-page-cloner - rotating announcement bar for cloned product pages only.
+  Upload as snippets/ppc-announcement-bar.liquid and render it once in the theme layout, right before the header:
+    {% render 'ppc-announcement-bar', template: template, product: product %}
+  (Or wrap the theme's existing announcement snippet with the same template.suffix check, keeping the theme's bar on
+  every other page.)
+  Shows only on product templates whose suffix contains "ppc-". Text per product: metafield ppc.announcement
+  (single or multi-line text, lines separated by "|"). Empty metafield = nothing rendered.
+  Write the text from YOUR offer (your real tiers and free-shipping threshold), never copy the reference's numbers.
+  Colors: metafields ppc.announcement_bg / ppc.announcement_fg (optional, default orange/white).
+  Trap: many themes make <body> a flex column -> the bar needs flex:0 0 auto or it collapses to 0px on desktop.
+{% endcomment %}
+{%- if template.suffix contains 'ppc-' and product.metafields.ppc.announcement.value != blank -%}
+  {%- assign ppc_lines = product.metafields.ppc.announcement.value | split: '|' -%}
+  {%- assign ppc_bg = product.metafields.ppc.announcement_bg.value | default: '#fb8c00' -%}
+  {%- assign ppc_fg = product.metafields.ppc.announcement_fg.value | default: '#ffffff' -%}
+  <div class="ppc-ab" style="background:{{ ppc_bg | escape }};color:{{ ppc_fg | escape }}"><div class="ppc-ab__track">
+    {%- for l in ppc_lines -%}<div class="ppc-ab__i">{{ l | strip | escape }}</div>{%- endfor -%}
+  </div></div>
+  <style>
+  .ppc-ab{flex:0 0 auto;height:42px;overflow:hidden;position:relative;z-index:5;font:14px/1.4 -apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.3px}
+  .ppc-ab__track{display:flex;height:100%;transition:transform .6s ease}
+  .ppc-ab__i{flex:0 0 100%;display:flex;align-items:center;justify-content:center;padding:0 12px;text-align:center}
+  @media(min-width:750px){.ppc-ab{height:45px}}
+  </style>
+  <script>
+  (function(){var t=document.querySelector('.ppc-ab__track');if(!t)return;var n=t.children.length,i=0;if(n<2)return;
+  setInterval(function(){i=(i+1)%n;t.style.transform='translateX(-'+(i*100)+'%)';},3500);})();
+  </script>
+{%- endif -%}

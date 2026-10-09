@@ -1,0 +1,18 @@
+
+/* product-page-cloner: base for .ppc-html/.ppc-body + scroll-snap gallery that replaces the reference page's swiper */
+.ppc-html{font-size:16px;color:rgb(47,47,47);background:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5;-webkit-text-size-adjust:100%}
+.ppc-body{margin:0}
+*,*::before,*::after{box-sizing:border-box}
+img{max-width:100%}
+[hidden]{display:none!important}
+/* gallery track replacing their swiper */
+.ppc-gal{position:relative;width:100%}
+.ppc-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ppc-track::-webkit-scrollbar{display:none}
+.ppc-track img{flex:0 0 100%;width:100%;aspect-ratio:1/1;object-fit:cover;scroll-snap-align:center;display:block}
+.ppc-count{position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,.45);color:#fff;font-size:13px;padding:2px 10px;border-radius:12px}
+.ppc-thumbs{display:flex;gap:8px;overflow-x:auto;padding:10px 0;scrollbar-width:none}
+.ppc-thumbs img{flex:0 0 64px;width:64px;height:64px;object-fit:cover;border:1px solid #ddd;cursor:pointer;opacity:.7}
+.ppc-thumbs img.on{border-color:#2f2f2f;opacity:1}
+.ppc-buynow{display:flex;align-items:center;justify-content:center;width:100%;height:48px;margin-top:10px;background:#2f2f2f;color:#fff;border:0;border-radius:4px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.3px}
+.ppc-busy{opacity:.6;pointer-events:none}
