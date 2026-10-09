@@ -20,9 +20,12 @@ Works with references on Shopify and on Chinese storefront platforms (Shoplazza-
 
 ## Requirements
 
-- Claude Code
-- Shopify Admin access: the Shopify admin MCP (`graphql_query` / `graphql_mutation`) or an Admin API app with themes,
-  products, discounts, shipping, files and publications scopes
+- An AI coding agent: Claude Code, OpenAI Codex CLI, Cursor, or similar
+- **Shopify Admin access for that agent** - read **[SETUP.md](SETUP.md)** first. Three ways:
+  - A. Claude: the official Shopify connector for Claude (tested with this skill)
+  - B. Codex / Cursor / others: Shopify CLI (`shopify store auth` + `shopify store execute --allow-mutations`)
+  - C. Any agent with a shell: a Dev Dashboard app + `scripts/admin_graphql.py`
+  (Shopify Dev MCP alone is NOT enough - it reads docs, not your store.)
 - Python 3 with `pip install websockets` (Pillow optional, for comparing screenshots)
 - Google Chrome (a dedicated profile with remote debugging for the scripts; see `scripts/cdp.py`)
 - Optional: a browser-automation tool for the agent (e.g. Claude in Chrome) to measure reference pages
@@ -30,7 +33,8 @@ Works with references on Shopify and on Chinese storefront platforms (Shoplazza-
 ## Install
 
 ```bash
-git clone <this-repo-url> ~/.claude/skills/product-page-cloner
+git clone https://github.com/anhnguyendj/product-page-cloner ~/.claude/skills/product-page-cloner
+# Codex: put it where your agent reads skills/instructions (e.g. ~/.codex/skills/) or point the agent at SKILL.md
 cd ~/.claude/skills/product-page-cloner
 cp store.example.json store.json      # then fill it in (or let the agent discover the IDs)
 pip install websockets

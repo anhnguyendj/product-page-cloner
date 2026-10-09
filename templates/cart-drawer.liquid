@@ -99,7 +99,7 @@
     '<div class="tip" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="1.8" stroke-linejoin="round"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z"/><circle cx="8" cy="8" r="1.6"/></svg><span class="tx"></span></div>' +
     '<div class="bd"><div class="lst"></div><div class="more" hidden><h4></h4><div class="strip"></div></div></div><div class="ft">' +
     '<div class="tt st"><span>Subtotal</span><b class="sub"></b></div><div class="tt dc" hidden><span>Discount</span><b class="dis"></b></div>' +
-    '<div class="ins" hidden><input type="checkbox" id="ppc-ins" checked><label for="ppc-ins">Add Shipping Insurance to your order <span class="ip"></span></label><span class="qm">?</span><div class="bub" hidden></div></div>' +
+    '<div class="ins" hidden><input type="checkbox" id="ppc-ins"><label for="ppc-ins">Add Shipping Insurance to your order <span class="ip"></span></label><span class="qm">?</span><div class="bub" hidden></div></div>' +
     '<div class="warn" hidden><span></span><button type="button">OK</button></div>' +
     '<div class="tt sum"><span>Total</span><b class="tot"></b></div>' +
     '<button class="co">CHECK OUT</button></div></div></div>';
@@ -126,8 +126,10 @@
   $('.x').onclick = closeDrawer;
 
   // remember an un-ticked insurance box for this session
-  var wantIns = true;
-  try { wantIns = sessionStorage.getItem('ppc-ins') !== '0'; } catch (e) {}
+  // Opt-in by default: pre-ticked paid add-ons are banned in the EU and draw FTC scrutiny in the US.
+  // The merchant can pre-tick via the section setting; the shopper's own choice wins for the session.
+  var wantIns = {{ section.settings.insurance_pretick | default: false | json }};
+  try { var ppcIns = sessionStorage.getItem('ppc-ins'); if (ppcIns !== null) wantIns = ppcIns === '1'; } catch (e) {}
   if (!INSV.length) wantIns = false;
   insBox.checked = wantIns;
 
@@ -413,6 +415,7 @@
   "settings": [
     { "type": "text", "id": "insurance_handle", "label": "Shipping insurance product handle (blank = off)" },
     { "type": "number", "id": "insurance_percent", "label": "Insurance % of item price", "default": 5 },
+    { "type": "checkbox", "id": "insurance_pretick", "label": "Pre-tick insurance (check your local consumer law first)", "default": false },
     { "type": "text", "id": "tiers", "label": "Quantity tiers qty:% (used when the page has no mix & match tiers)", "default": "2:5,3:10,4:20" },
     { "type": "text", "id": "tip", "label": "Insurance tooltip", "default": "Shipping insurance protects your order against loss or damage in transit." },
     { "type": "text", "id": "warn", "label": "Message when insurance is unticked", "default": "Without shipping insurance we cannot replace items that are lost or damaged in transit." },

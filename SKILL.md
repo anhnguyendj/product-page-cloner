@@ -14,7 +14,9 @@ matches to the pixel. A first run takes a day of discovery; following this skill
 `store.example.json` -> `store.json` (store facts, gitignored), `clone-config.example.json` -> `<work>/clone-config.json`
 (per clone, gitignored), `LEARNINGS.md`, `CASES.md`, `CHECKS.md` (the skill's memory - see last section).
 
-**Tools needed**: Shopify Admin GraphQL (Shopify MCP `graphql_query` / `graphql_mutation`, or Admin API access) ·
+**Tools needed**: Shopify Admin GraphQL with mutations - one of: the Shopify connector for Claude (`graphql_query` /
+`graphql_mutation`), Shopify CLI `shopify store execute --allow-mutations` (Codex, Cursor, other agents), or
+`scripts/admin_graphql.py` (direct API). How to connect any agent: **SETUP.md** ·
 a browser the agent can drive for reading pages (Claude in Chrome or similar) · a DEDICATED Chrome with remote
 debugging for the scripts (`CDP_PORT`, default 9230; see `scripts/cdp.py` for the launch command) ·
 Python 3 + `pip install websockets` (Pillow optional, for cropping/comparing screenshots).
@@ -24,6 +26,10 @@ Never borrow a Chrome instance that other automation is using: backgrounded tabs
 
 ## Before you start (mandatory, 2 minutes)
 
+0. **Connection check.** Find which Shopify path this agent has (SETUP.md: A connector tools, B `shopify store
+   execute`, C `scripts/admin_graphql.py` + env vars). Run the read-only `{ shop { name myshopifyDomain } }`. No path
+   works -> STOP, send the user to SETUP.md, do not improvise credentials, never ask them to paste a token in chat.
+   Use the SAME path for every GraphQL call in this run; where this file shows "MCP"/`graphql_mutation`, use your path.
 1. Read `LEARNINGS.md` (mistakes users already pointed out - do not repeat them), `CASES.md` (which branch this
    clone is), `CHECKS.md` (what acceptance means). Note the start time for the Run log.
 2. Load `store.json` (skill root or work dir). Missing -> copy `store.example.json`, discover the IDs (below), ask the
@@ -332,8 +338,8 @@ Non-Plus Shopify cannot add a checkbox to checkout. Pattern:
   the variant whose price = round(% x variant price), one insurance line per product line).
 - The tick box lives in the cart drawer; insurance quantity follows product quantity (self-heals). In checkout it is
   a normal line item.
-- Pre-ticked insurance increases complaints/chargebacks and is restricted in some jurisdictions - tell the user;
-  recommend unticked by default unless they decide otherwise. Write insurance texts truthfully (what it covers).
+- The box is UNTICKED by default (section setting `insurance_pretick`, default false). Pre-ticked paid add-ons are
+  banned in the EU and draw FTC scrutiny in the US; only turn it on if the user decides to after checking their law. Write insurance texts truthfully (what it covers).
 
 ## Stage 10 - Acceptance (mandatory, with numbers)
 
