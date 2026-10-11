@@ -18,6 +18,32 @@ wires them to your real products, variants, discounts, cart and checkout:
 
 Works with references on Shopify and on Chinese storefront platforms (Shoplazza-style).
 
+## Two modes
+
+| | FULL | LITE |
+|---|---|---|
+| Who | an agent with Shopify Admin access + a shell (Claude Code, Codex, Cursor) | any chat assistant that can read a web page (e.g. Claude in the chat app) |
+| Result | duplicated theme with the rebuilt page, cart drawer, discounts, shipping, insurance, checks | one **Custom Liquid** block you paste into the theme editor, wired to your real product |
+| Setup | [SETUP.md](SETUP.md) | none - add the skill and ask |
+| Not included | - | cart drawer, mix & match, per-product shipping, insurance, real-data social proof |
+
+## How to ask
+
+The agent asks three short questions first (mode, which photos/description to use, your brand name), then works.
+Good requests:
+
+- *"Clone this product page onto my store for my product: https://reference.example/products/x"*
+- *"Make my product page look like https://reference.example/products/x. Reuse their photos and description for
+  a quick test, my brand is Acme."*
+- *"I only have the chat app: give me a Custom Liquid block for my Shopify product page that looks like
+  https://reference.example/products/x"*
+
+Vietnamese works too: *"Clone trang sản phẩm này sang store của tôi: <link>. Dùng ảnh và mô tả của trang gốc để
+test, thương hiệu của tôi là ..."*
+
+Photos and description: you choose **A** (reuse the reference's to test fast - you accept the copyright risk, and
+replace them with your own once the product wins) or **B** (your own). The agent asks; it does not decide for you.
+
 ## Requirements
 
 - An AI coding agent: Claude Code, OpenAI Codex CLI, Cursor, or similar
@@ -46,7 +72,7 @@ pip install websockets
 
 1. Start a dedicated Chrome for the scripts (default port 9230):
    `chrome --remote-debugging-port=9230 --user-data-dir=/tmp/ppc-chrome`
-2. In Claude Code: *"Make my product page for <my product> look like https://reference.example/products/x"*.
+2. In Claude Code: *"Clone this product page onto my store for <my product>: https://reference.example/products/x"*.
 3. The agent follows `SKILL.md` stages 0-10: measures the reference, creates/updates your product, extracts the page,
    builds the section (`scripts/build_section.py`), uploads to a **duplicated** theme, sets up discounts / shipping /
    insurance **after asking you**, runs the acceptance checks and sends you a preview link.
@@ -63,13 +89,15 @@ py -3 scripts/screenshot.py file:///.../out/test.html work/my-product rebuild
 
 ## Guardrails
 
-The skill mirrors layout and UX only. It will:
+The skill copies the page, not the store's identity. It will:
 
 - never copy the reference store's name, logo, domain or trademarks
-- never reproduce third-party rating badges, review counts, fake origin claims, fake countdowns, fake stock counters
-  or fake "recently purchased" notifications - and it tells you why it removed them
-- default to **your own** product photos and copy; reusing someone else's media is a copyright decision you make and
-  are responsible for
+- never reproduce third-party rating badges, review counts, fake origin claims, fake countdowns, invented stock
+  counters, invented visitor counts or invented "recently purchased" notifications - it tells you why, and offers
+  the same widgets fed by **your real data** instead ("Only N left" from tracked inventory, "recently purchased"
+  from your real paid orders; nothing shows when there is no real data)
+- ask whether to reuse the reference's photos and description (your decision and your copyright risk) or use your
+  own
 - never write to your live theme (duplicate -> preview -> you publish)
 - ask before any change that is live immediately (discounts, delivery profiles, product status)
 - never place orders or pay while testing checkout, and clear test carts

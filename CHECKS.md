@@ -25,4 +25,6 @@ that a machine can verify. Never fill checkout forms or pay; clear the test cart
 | K17 | REMOVE every line; BUY IT NOW | empty cart state; BUY IT NOW lands on `/checkout` (stop there) |
 | K18 | guardrail scan of visible HTML | 0 occurrences of the reference store name/domain, third-party rating badges, fabricated counts, fake origin claims, fake scarcity |
 | K19 | product status + publications | ACTIVE and published to Online Store; template suffix `ppc-<slug>`; no "Unavailable" on the page |
+| K21 | real-data social proof: compare `ppc.recent_orders` with the latest paid orders; set a tracked variant to qty <= `low_stock_max`, then an untracked one | every notice = a real order (time matches `createdAt`, name masked to initial + `***`); low-stock line only on the tracked variant, with its real quantity |
+| K22 | LITE block pasted: phone width screenshot; pick tier 3, ADD TO CART | looks like the reference; cart has 3 of the product; cart/checkout discount equals the tier shown |
 | K20 | cleanup | test carts cleared on your store; reference cart restored; tabs you opened are closed |

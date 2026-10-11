@@ -1,0 +1,126 @@
+{%- comment -%}
+  product-page-cloner - REAL-DATA social proof. Replaces the reference's invented counters ("4181 visitors",
+  fake "recently purchased", "only 1% left") with the same look, fed only by YOUR store's real data.
+  Upload as sections/ppc-social-proof.liquid; build_section.py adds it to the product template when
+  clone-config.json has "social_proof": {...}.
+
+  1. Low stock line ("Only 3 left in stock") under the price, inside the cloned buy box.
+     Source: variant.inventory_quantity. Shown ONLY when the variant's inventory is tracked by Shopify,
+     0 < quantity <= low_stock_max. Untracked / dropship variants (the usual case) -> nothing is shown.
+     Follows the selected variant (runtime event 'ppc:variant').
+  2. "Recently purchased" notice. Source: shop metafield ppc.recent_orders (type json), written by the agent from
+     REAL paid orders (SKILL.md "Real-data social proof"). Entry: {"n":"J***","s":"Texas","t":"<ISO createdAt>",
+     "p":"<product title>","i":"<image url>","u":"<product url>"}. The time shown is computed from the real order
+     time; entries older than max_age_days are dropped, so a stale list goes quiet instead of lying.
+     Empty / missing metafield -> nothing is shown. Desktop: card bottom-left. Phone: pill at the top.
+  Never edit the metafield by hand to add orders that did not happen.
+{%- endcomment -%}
+{%- liquid
+  assign low_max = section.settings.low_stock_max | default: 0
+  assign recent = shop.metafields.ppc.recent_orders.value
+-%}
+<script type="application/json" id="ppc-sp-data">{
+  "low": {
+    {%- if low_max > 0 -%}
+      {%- assign first = true -%}
+      {%- for v in product.variants -%}
+        {%- if v.inventory_management == 'shopify' and v.inventory_quantity > 0 and v.inventory_quantity <= low_max -%}
+          {%- unless first -%},{%- endunless -%}"{{ v.id }}":{{ v.inventory_quantity }}{%- assign first = false -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+  },
+  "first": {{ product.selected_or_first_available_variant.id | default: 0 }},
+  "recent": {%- if section.settings.recent and recent -%}{{ recent | json }}{%- else -%}[]{%- endif -%},
+  "max_age_days": {{ section.settings.max_age_days | default: 7 }},
+  "every": {{ section.settings.every | default: 12 }},
+  "low_text": {{ section.settings.low_text | default: 'Only [n] left in stock' | json }},
+  "anchor": {{ section.settings.anchor | default: '.product__price,.product-price,.price' | json }}
+}</script>
+<style>
+.ppc-sp-low{display:block;margin:8px 0;color:#d0021b;font-weight:600;font-size:14px}
+#ppc-sp-card{position:fixed;left:16px;bottom:16px;z-index:60;width:304px;display:flex;gap:10px;align-items:center;background:#fff;color:#222;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:8px 28px 8px 8px;font:13px/1.35 -apple-system,"Segoe UI",Roboto,sans-serif;text-decoration:none;transform:translateY(140%);transition:transform .35s}
+#ppc-sp-card.on{transform:none}
+#ppc-sp-card img{width:64px;height:64px;object-fit:cover;border-radius:6px;flex:0 0 64px}
+#ppc-sp-card b{display:block;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#ppc-sp-card small{color:#888}
+#ppc-sp-card .x{position:absolute;top:4px;right:6px;border:0;background:none;font-size:16px;line-height:1;color:#999;cursor:pointer}
+@media (max-width:749px){
+  #ppc-sp-card{left:50%;top:10px;bottom:auto;width:auto;max-width:92vw;padding:6px 26px 6px 6px;border-radius:999px;background:rgba(20,20,20,.88);color:#fff;transform:translate(-50%,-160%)}
+  #ppc-sp-card.on{transform:translate(-50%,0)}
+  #ppc-sp-card img{width:28px;height:28px;flex-basis:28px;border-radius:50%}
+  #ppc-sp-card b{display:none}#ppc-sp-card small{color:#ccc}
+}
+</style>
+<script>
+(function () {
+  var D; try { D = JSON.parse(document.getElementById('ppc-sp-data').textContent); } catch (e) { return; }
+
+  // 1. low stock (real inventory only)
+  var cur = D.first;
+  function low() {
+    var host = document.getElementById('ppc-root'), root = host && host.shadowRoot;
+    if (!root) return false;
+    var el = root.querySelector('.ppc-sp-low'), n = D.low[String(cur)];
+    if (!n) { if (el) el.remove(); return true; }
+    if (!el) {
+      var a = root.querySelector(D.anchor); if (!a) return true;
+      el = document.createElement('span'); el.className = 'ppc-sp-low'; a.insertAdjacentElement('afterend', el);
+    }
+    el.textContent = D.low_text.replace('[n]', n);
+    return true;
+  }
+  if (Object.keys(D.low).length) {
+    var tries = 0, t = setInterval(function () { if (low() || ++tries > 40) clearInterval(t); }, 250);
+    var host = document.getElementById('ppc-root');
+    if (host) host.addEventListener('ppc:variant', function (e) { cur = e.detail && e.detail.id; low(); });
+  }
+
+  // 2. recently purchased (real orders only, real times)
+  var now = Date.now(), maxAge = D.max_age_days * 864e5;
+  var list = (D.recent || []).filter(function (r) {
+    var t = Date.parse(r && r.t); return r && r.p && t && t <= now && now - t <= maxAge;
+  });
+  var off = false; try { off = sessionStorage.getItem('ppc-sp-off') === '1'; } catch (e) {}
+  if (!list.length || off) return;
+  function ago(t) {
+    var m = Math.max(1, Math.round((Date.now() - t) / 6e4));
+    if (m < 60) return m + (m === 1 ? ' minute ago' : ' minutes ago');
+    var h = Math.round(m / 60); if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+    var d = Math.round(h / 24); return d + (d === 1 ? ' day ago' : ' days ago');
+  }
+  var card = document.createElement('a'); card.id = 'ppc-sp-card';
+  document.body.appendChild(card);
+  var i = 0, timer;
+  function show() {
+    var r = list[i++ % list.length];
+    card.href = r.u || '#';
+    card.innerHTML = (r.i ? '<img alt="" loading="lazy">' : '') + '<span><b></b><span class="w"></span><br><small></small></span>' +
+      '<button type="button" class="x" aria-label="Close">&times;</button>';
+    if (r.i) card.querySelector('img').src = r.i;
+    card.querySelector('b').textContent = r.p;
+    card.querySelector('.w').textContent = (r.n || 'Someone') + (r.s ? ' in ' + r.s : '') + ' purchased';
+    card.querySelector('small').textContent = ago(Date.parse(r.t));
+    card.querySelector('.x').onclick = function (e) {
+      e.preventDefault(); clearTimeout(timer); card.remove();
+      try { sessionStorage.setItem('ppc-sp-off', '1'); } catch (x) {}
+    };
+    card.classList.add('on');
+    timer = setTimeout(function () { card.classList.remove('on'); timer = setTimeout(show, D.every * 1000); }, 5000);
+  }
+  timer = setTimeout(show, 8000);
+})();
+</script>
+{% schema %}
+{
+  "name": "PPC social proof (real data)",
+  "settings": [
+    { "type": "number", "id": "low_stock_max", "label": "Show 'only N left' at or below (0 = off; tracked inventory only)", "default": 5 },
+    { "type": "text", "id": "low_text", "label": "Low stock text ([n] = real quantity)", "default": "Only [n] left in stock" },
+    { "type": "text", "id": "anchor", "label": "Insert low stock line after (CSS selector inside the cloned buy box)", "default": ".product__price,.product-price,.price" },
+    { "type": "checkbox", "id": "recent", "label": "Show recent purchases from shop metafield ppc.recent_orders", "default": true },
+    { "type": "number", "id": "max_age_days", "label": "Hide purchases older than (days)", "default": 7 },
+    { "type": "number", "id": "every", "label": "Seconds between notices", "default": 12 }
+  ]
+}
+{% endschema %}

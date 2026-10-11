@@ -21,6 +21,8 @@ Generic wording only - no store names, domains, IDs or prices (those belong in `
 | seed | "they have Buy with Shop, why don't we" | removed their express button without adding ours | `shop_pay: true` + `<slot>`; CHECKS K14 |
 | seed | title and review line huge, wrapping on phone | `rem` in inline styles resolved against theme root 16px (reference 10px) | Shopify-source CSS fixes; CHECKS K12 |
 | seed | (self-caught) "Buy 2" button dead | extracted while the reference cart had items | extract with an empty reference cart |
+| 2026-10-11 | users' assistants refused "clone this shop <url>" and offered only a generic page | skill said "default to own media" with no question to ask, no meaning for "clone this store", no path for chat-only agents; description over the 1,024-char skill limit | up-front questions (mode, A/B media, brand), "Clone this store" section, LITE mode, description <= 1,024 (SKILL.md) |
+| 2026-10-11 | users wanted the reference's visitor / "recently purchased" / low-stock widgets | they were invented numbers, so the skill removed them and left a gap | same widgets fed by real data: `templates/social-proof.liquid` (stage 7); CHECKS K21 |
 | seed | user asked to keep a third-party rating badge / origin claim | those are another store's reviews / a false claim | refuse, remove in html_fixes, explain why (guardrails) |
 
 ## Run log

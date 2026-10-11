@@ -12,7 +12,7 @@ Writes to <work-dir>/out/:
   snippets/<P>-<slug>-h1..hN.liquid    HTML chunks  (each <= 19KB)
   snippets/<P>-<slug>-j1..jN.liquid    runtime JS chunks (each <= 19KB)
   assets/<P>-<slug>-fonts.css          @font-face in the MAIN document (@font-face inside a shadow root is ignored)
-  templates/product.<P>-<slug>.json    main (+ related) + cart drawer (+ exit popup)
+  templates/product.<P>-<slug>.json    main (+ related) (+ real-data social proof) + cart drawer (+ exit popup)
   fonts/                               original font files downloaded -> upload to Shopify Files, fill font_urls
   test.html                            open locally to eyeball before uploading
   manifest.txt                         every output file with size + md5 (LF line endings) to compare with
@@ -168,9 +168,11 @@ src_host = urllib.parse.urlparse(SRC).netloc.lower()
 src_name = max(src_host.split(".")[:-1] or [""], key=len)  # longest label except the TLD, e.g. "brandname"
 if len(src_name) > 3 and src_name in visible.lower():
     print(f"  WARNING: the reference store name/domain ('{src_name}') still appears in the visible HTML - remove it with html_fixes")
-for word in ("trustpilot", "judge.me verified", "designed in", "only 1 left", "people are viewing", "visitors"):
+for word in ("trustpilot", "judge.me verified", "designed in", "only 1 left", "people are viewing", "visitors",
+             "recently purchased", "left in stock", "sold in the last"):
     if word in visible.lower():
-        print(f"  CHECK: '{word}' found - third-party badge / scarcity / origin claim? Remove unless true for YOUR store (SKILL.md guardrails)")
+        print(f"  CHECK: '{word}' found - third-party badge / scarcity / origin claim? Remove it; real stock / real "
+              "recent orders come from the ppc-social-proof section instead (SKILL.md guardrails)")
 
 # ---------- drop unused @keyframes (one real case: 312 of them, CSS 88KB -> 31KB) ----------
 used_anim = " ".join(set(re.findall(r"animation(?:-name)?\s*:[^;}]*", css)))
@@ -247,6 +249,10 @@ order = ["main"]
 if C.get("related", True):
     sections["related"] = {"type": "ppc-related", "settings": {}}
     order.append("related")
+SP = C.get("social_proof")
+if SP is not None and SP is not False:
+    sections["proof"] = {"type": "ppc-social-proof", "settings": SP if isinstance(SP, dict) else {}}
+    order.append("proof")
 drawer = {"insurance_handle": STORE.get("insurance_product_handle") or "", "insurance_percent": STORE.get("insurance_percent", 5)}
 drawer.update(C.get("drawer", {}))
 sections["drawer"] = {"type": "ppc-cart-drawer", "settings": drawer}

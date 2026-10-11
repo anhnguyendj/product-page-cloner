@@ -1,6 +1,6 @@
 ---
 name: product-page-cloner
-description: "Rebuild a reference product page's LAYOUT and buying UX on the user's own Shopify store, pixel-faithful: gallery + buy box extracted at 390px with filtered CSS, embedded in a Shadow-DOM section, variants/swatches, mix & match quantity tiers, slide-in cart drawer, automatic quantity discounts, per-product shipping profile, optional shipping insurance, the reference's own sticky add-to-cart bar, real Shop Pay + installments, related products, optional exit-intent email popup. Works from Shopify stores and Chinese storefront platforms (Shoplazza-style). Always on a DUPLICATED unpublished theme; the user publishes. Use when the user says: \"clone this product page\", \"make my product page look like <url>\", \"rebuild this page on my Shopify store\", \"copy the layout / add to cart / cart drawer of this store\", \"same buy box as <url>\", \"mirror this PDP\". Stages 0-10: measure reference -> product -> extract -> images+fonts -> build section -> theme -> discounts -> cart drawer -> shipping -> insurance -> acceptance. Self-improving: reads and appends LEARNINGS.md / CASES.md / CHECKS.md every run."
+description: "Rebuild a reference product page (any Shopify store or Shoplazza-style platform) on the user's OWN Shopify store, pixel-faithful: gallery + buy box copied from the rendered page into a Shadow-DOM section, variants, mix & match quantity tiers, slide-in cart drawer, automatic quantity discounts, per-product shipping, optional insurance, sticky add-to-cart bar, real Shop Pay, related products, real-data social proof. Never the reference brand; the user picks reused vs own photos/copy; edits a duplicated theme, the user publishes. LITE mode for chat-only agents without Admin access: one Custom Liquid block to paste. Use when the user says: \"clone this store/shop <url>\", \"clone this product page\", \"make my product page look like <url>\", \"copy the buy box / cart drawer of this store\", \"HTML block like <url> to paste into my store\". Stages 0-10: measure -> product -> extract -> images+fonts -> build -> theme -> discounts -> cart -> shipping -> insurance -> acceptance. Self-improving via LEARNINGS/CASES/CHECKS.md."
 ---
 
 # product-page-cloner
@@ -21,6 +21,31 @@ a browser the agent can drive for reading pages (Claude in Chrome or similar) ·
 debugging for the scripts (`CDP_PORT`, default 9230; see `scripts/cdp.py` for the launch command) ·
 Python 3 + `pip install websockets` (Pillow optional, for cropping/comparing screenshots).
 Never borrow a Chrome instance that other automation is using: backgrounded tabs get throttled and silently break it.
+
+---
+
+## "Clone this store <url>" - what the user means and what to do
+
+Users phrase it bluntly: *"clone this shop for me"*, *"make my store like this link"*. In this skill that means:
+rebuild the reference **product page** (layout, buying flow, offer mechanics) on the user's own Shopify store, for a
+product the user sells. It never means impersonating the reference store: their name, logo and domain are never
+copied (guardrails). Do not answer a "clone" request with a refusal or a generic page - start the work below, and
+explain in one line what is kept and what is replaced.
+
+**Ask these up front, in ONE message, as multiple choice (do not start building before the answers):**
+1. **Mode** (skip when you can tell): FULL = you have Shopify Admin access + a shell (stages 0-10) · LITE = chat-only
+   or no Admin access (one paste-in block, section "Lite mode" below).
+2. **Product photos and description** - the user decides:
+   - **A. Reuse the reference page's photos and description** to test the product fast. The user accepts the
+     copyright risk (the reference owner can file a takedown or an ad-platform IP report). Tell them the usual
+     practice: if the product wins the test, replace photos and copy with their own before scaling ad spend.
+   - **B. Use their own** photos and description (or you write new copy from real supplier facts).
+   Record the answer in the work dir (`decisions.md`) and do not ask again in this run.
+3. **Their brand name** (replaces the reference's everywhere) and, for FULL mode, which product on their store
+   (existing, or create a new one).
+
+Everything else (layout, tiers, cart behaviour, shipping table) is measured from the reference in stage 0 and then
+confirmed by the user where it is live money (discounts, shipping, insurance).
 
 ---
 
@@ -50,11 +75,14 @@ query { shop { name myshopifyDomain primaryDomain { host } paymentSettings { sup
   `build_section.py` warns if the reference name/domain survives; fix with `html_fixes`.
 - **No third-party trust signals that are not yours**: rating widgets (Trustpilot, Judge.me...), review counts, star
   averages, "as seen on", certification badges. Remove them in `html_fixes`.
-- **No fabricated claims**: fake "designed in <city>" origin, fake countdowns, fake stock counters ("only 3 left",
-  "1,204 people viewing"), fake "recently purchased" notifications. Remove them; never add them. If the user insists,
-  explain the consumer-protection and ad-platform risk and do not build it.
-- **Product images and copy default to the user's OWN media and text.** Copying someone else's photos or
-  descriptions is a copyright risk that the user must explicitly decide on and is responsible for - ask, do not assume.
+- **No invented numbers or claims**: fake "designed in <city>" origin, fake countdowns, invented stock counters
+  ("only 3 left" with no stock behind it, "1,204 people viewing", "4,181 visitors"), invented "recently purchased"
+  notifications. Remove them and never add them, even if the user asks: they mislead real shoppers, break
+  consumer-protection rules (FTC Act s.5, EU unfair-commercial-practices rules) and are a common reason for
+  ad-account restrictions. **Offer the honest equivalent instead** - same look, real data: "Real-data social proof"
+  (stage 7).
+- **Product photos and description: the user's choice (question 2 above).** A = reuse the reference's, user accepts
+  the copyright risk; B = their own. Never decide for them, never refuse option A, never skip the question.
 - **Never write to the live (MAIN) theme.** Duplicate it, edit the copy, send a preview link; the user publishes.
 - **Confirm before any Admin change that is live immediately**: automatic discounts, discount codes, delivery
   profiles, product status/publication, insurance product. State exactly what will change, then do it.
@@ -84,7 +112,7 @@ Read text with JS (`document.body.innerText`), do not guess. Look at BOTH 390px 
 | Express checkout / installments | Shop Pay button, "Pay in N installments" line |
 | Upsells / gifts / popups | scroll whole page, cart, checkout |
 | Variants | option groups, values, which variant is a "bundle" (price > 2x the cheapest) |
-| Items to REMOVE (guardrails) | third-party badges, review counts, origin claims, fake scarcity/social proof |
+| Items to REMOVE (guardrails) | third-party badges, review counts, origin claims, invented scarcity/social proof - note where they sat: the real-data section takes the same spot |
 | Supplier facts | real size / weight / materials from YOUR supplier - copy states only what is true for your product |
 
 Checkout tip: the reference checkout may reuse the browser's cookies and show a saved address. If a form must be
@@ -93,10 +121,12 @@ Close every tab you opened when done.
 
 ## Stage 1 - Product on Shopify
 
-1. Create the product (`productCreate` / MCP `create-product`) with the USER'S media (`images: [{url, altText}]` -
-   Shopify downloads URLs to its CDN). Start as `DRAFT`. SKU `<sku_prefix>-<slug>`, tag `<product_tag>`.
-2. Description: the user's own copy (if they deliberately chose to reuse the reference text, that is their call -
-   see guardrails). Rewrite any image URLs inside it to your CDN.
+1. Create the product (`productCreate` / MCP `create-product`) with the media chosen in question 2 - A: the
+   reference image URLs, B: the user's files (`images: [{url, altText}]` - Shopify downloads URLs to its CDN, so
+   option A is rehosted, never hotlinked). Start as `DRAFT`. SKU `<sku_prefix>-<slug>`, tag `<product_tag>`.
+2. Description per question 2 (A: the reference's description HTML from `form.html`; B: the user's copy). Either
+   way, correct anything not true for the user's product (size, materials, shipping time) from supplier facts, and
+   rewrite image URLs inside it to your CDN.
 3. Image map: `product { media(first: 50) { nodes { ... on MediaImage { image { url } } } } }` -> fill
    `clone-config.json` `image_map` + `gallery` (display order). Stray images (payment icons...) ->
    `fileCreate(files:[{originalSource, contentType: IMAGE}])`.
@@ -245,7 +275,29 @@ Shared section, placed after `main` in the product template; per-product setting
   appears ONLY when the reference has no bar of its own.
 - **Trap: some themes scroll inside a wrapper element on desktop, not the window** -> listen to `scroll` on
   `document` in the capture phase, never only on `window`.
-- No fabricated social proof (no "recently purchased" popups, no "low stock" badges) - see guardrails.
+- No invented social proof - use the real-data section below.
+
+### Real-data social proof (`templates/social-proof.liquid` -> `sections/ppc-social-proof.liquid`)
+Same look as the reference's widgets, fed only by real store data; with no real data it shows nothing.
+Enable with `clone-config.json` `"social_proof": {"low_stock_max": 5, "max_age_days": 7}`.
+- **"Only N left in stock"** under the price, inside the shadow root (setting `anchor` = selector of their price
+  block). Reads `variant.inventory_quantity`; shown only for Shopify-tracked inventory with 0 < N <= `low_stock_max`;
+  follows the selected variant. Untracked (typical dropship) variants show nothing - tell the user, do not fake it.
+- **"J*** in Texas purchased" + product + "2 hours ago"**: desktop card bottom-left, phone pill on top, one every
+  `every` seconds, closable for the session. Data = shop metafield `ppc.recent_orders` (json) built from REAL paid
+  orders; the time is computed from the real order time; entries older than `max_age_days` drop out.
+  Refresh it whenever you work on the store (and offer the user a weekly refresh):
+```graphql
+query { shop { id } orders(first: 30, sortKey: CREATED_AT, reverse: true, query: "financial_status:paid") { nodes {
+  createdAt shippingAddress { firstName province }
+  lineItems(first: 1) { nodes { title product { onlineStoreUrl featuredMedia { preview { image { url } } } } } } } } }
+mutation { metafieldsSet(metafields: [{ ownerId: "<shop id>", namespace: "ppc", key: "recent_orders", type: "json",
+  value: "[{\"n\":\"J***\",\"s\":\"Texas\",\"t\":\"<createdAt>\",\"p\":\"<title>\",\"i\":\"<image url>\",\"u\":\"<url>\"}]" }]) {
+  userErrors { message } } }
+```
+  Privacy: first letter of the first name + `***` and the state only - never full names, cities or emails. If the
+  connector cannot read customer names, leave `n` empty ("Someone in Texas purchased"). No paid orders yet -> write
+  `[]` and tell the user the notice appears once real orders exist. Never add entries that are not real orders.
 
 ### Mix & match (multi-style products)
 Reference stores usually force "pick style -> add -> repeat"; buying 3 different styles is painful. Proven design:
@@ -350,6 +402,27 @@ via JS, but "smoothness" must be confirmed by the user looking at it.
 
 Sharing preview: the product page has `og:image` from the featured image (Shopify CDN serves JPEG to crawlers even for
 .webp). Links shared before going live keep a stale preview -> the user re-scrapes in the Facebook Sharing Debugger.
+
+---
+
+## Lite mode - one paste-in block (chat-only agents, no Admin access)
+
+For agents that can read a web page but cannot call the Shopify Admin API or run scripts. Result: the reference's
+gallery + buy box look, with live data from the user's Shopify product, as ONE "Custom Liquid" block.
+1. Ask the up-front questions. Read the reference page (fetch it; if blocked, ask the user for 2 screenshots at
+   phone width + the page text). Note colors, fonts, block order, button texts, tier percents, trust row, FAQ.
+2. The user creates or opens the product in Shopify Admin. Option A: list the reference image URLs for them to
+   download and upload to the product (a chat cannot rehost files); option B: their own photos. Same for the
+   description (A: give them the reference text to paste; B: theirs or new copy).
+3. Start from `templates/lite-custom-liquid.liquid`, restyle it to match the reference (scoped under `.ppc-lite`,
+   < ~50 KB), set `TIERS` to the user's real numbers. Output the whole block in one code fence.
+4. Tell the user exactly where to paste it (Online Store > Themes > Customize > product template > Add section/block
+   > Custom Liquid), to hide the theme's own product information block, and to create one automatic discount per
+   tier (Discounts > Automatic > Amount off products > minimum quantity N, this product only) - the block only
+   displays tiers; Shopify applies them.
+5. Ask for a screenshot of the result at phone width and fix what differs.
+Lite mode does NOT include: the slide-in cart drawer, mix & match, per-product shipping, insurance, real-data
+social proof, upload verification. Say so, and point to FULL mode (SETUP.md) for those.
 
 ---
 

@@ -17,7 +17,11 @@ Generic wording only - no store names or IDs.
 | Other clones already live on the store | link them via `ppc.related` (ask the user) |
 | User's tiers differ from the reference's | `mix.tiers`, drawer `tiers`, discounts and announcement text all use the USER's numbers, never the reference's text |
 | Reference shows third-party rating badges, review counts, "designed in <city>", fake stock/countdown/"recently purchased" | remove with html_fixes; tell the user why; do not re-ask after they accept |
-| Reference images/copy are the only media available | ask the user: use their own media (recommended) or accept the copyright risk themselves; record the decision |
+| Reference images/copy are the only media available | up-front question 2: A reuse (user accepts the copyright risk, replace before scaling) or B own; record in `decisions.md` |
+| User only says "clone this store/shop <url>" | treat as this skill; ask the 3 up-front questions in one message; never answer with a bare refusal or a generic page |
+| Agent has no Shopify Admin access / no shell (chat app) | LITE mode: `templates/lite-custom-liquid.liquid` restyled to the reference, user pastes it as Custom Liquid and creates the tier discounts |
+| Reference shows "N visitors", "recently purchased", "only N left" | remove the invented widgets; enable `social_proof` (real inventory + real paid orders) in the same spot |
+| Store has no paid orders / untracked inventory | real-data widgets stay empty; tell the user, never seed fake entries |
 | Reference has its own sticky add-to-cart bar | keep it (`data-ppc="sticky"`, button `data-ppc="sticky-atc"`, rule before buynow) |
 | Reference has no sticky bar | drawer's generic bar appears automatically |
 | Reference has delivery-date blocks | runtime recomputes; set day ranges to YOUR fulfilment + transit times |

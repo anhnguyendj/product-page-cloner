@@ -1,0 +1,107 @@
+{%- comment -%}
+  product-page-cloner LITE MODE - one block the user pastes into Shopify:
+  Online Store > Themes > Customize > Products > Default product (or a duplicated template) > Add block/section >
+  "Custom Liquid" > paste. Works with no Admin API, no shell, no scripts (e.g. Claude in a chat app).
+
+  The agent ADAPTS this skeleton to the reference page: colors, fonts, spacing, block order, button texts, tier
+  badges, trust row, FAQ. Product data (images, title, price, variants) is read live from the user's Shopify product,
+  so nothing here can drift from what checkout charges.
+
+  Rules: keep it under ~50 KB · all CSS scoped under .ppc-lite · TIERS below must equal automatic discounts the user
+  creates in Admin > Discounts (the block only DISPLAYS them; Shopify applies them in cart/checkout) · no invented
+  counters, reviews, badges or countdowns · hide the theme's own product info block so the page is not doubled.
+{%- endcomment -%}
+{%- liquid
+  # [qty, percent, badge] - MUST match Admin > Discounts > automatic "Amount off products", minimum quantity
+  assign TIERS = '1:0:,2:5:,3:10:MOST POPULAR,4:20:BEST VALUE' | split: ','
+  assign DEFAULT_TIER = 2
+  assign v0 = product.selected_or_first_available_variant
+-%}
+<div class="ppc-lite" data-price="{{ v0.price }}">
+  <div class="pl-gal">
+    <div class="pl-track">
+      {%- for m in product.media -%}{%- if m.media_type == 'image' -%}
+        <img src="{{ m | image_url: width: 1000 }}" alt="{{ m.alt | escape }}" width="1000" height="1000"
+             {% if forloop.first %}fetchpriority="high"{% else %}loading="lazy"{% endif %}>
+      {%- endif -%}{%- endfor -%}
+    </div>
+    <span class="pl-n">1 / {{ product.media.size }}</span>
+  </div>
+
+  <div class="pl-box">
+    <h1 class="pl-t">{{ product.title }}</h1>
+    <div class="pl-p"><b class="pl-now">{{ v0.price | money }}</b>
+      {%- if v0.compare_at_price > v0.price -%}<s>{{ v0.compare_at_price | money }}</s>
+      <span class="pl-off">Save {{ v0.compare_at_price | minus: v0.price | times: 100.0 | divided_by: v0.compare_at_price | round }}%</span>{%- endif -%}
+    </div>
+
+    {%- form 'product', product, class: 'pl-form' -%}
+      {%- unless product.has_only_default_variant -%}
+        <select name="id" class="pl-var">
+          {%- for v in product.variants -%}
+            <option value="{{ v.id }}" data-price="{{ v.price }}" {% if v == v0 %}selected{% endif %} {% unless v.available %}disabled{% endunless %}>{{ v.title }}</option>
+          {%- endfor -%}
+        </select>
+      {%- else -%}<input type="hidden" name="id" value="{{ v0.id }}">{%- endunless -%}
+      <input type="hidden" name="quantity" value="1" class="pl-qty">
+
+      <div class="pl-tiers">
+        {%- for t in TIERS -%}{%- assign p = t | split: ':' -%}
+          <label class="pl-tier"><input type="radio" name="pl-tier" value="{{ p[0] }}" data-off="{{ p[1] }}" {% if forloop.index == DEFAULT_TIER %}checked{% endif %}>
+            <span class="pl-tq">Buy {{ p[0] }}{% if p[1] != '0' %} <em>Save {{ p[1] }}%</em>{% endif %}</span>
+            {%- if p[2] != blank -%}<span class="pl-badge">{{ p[2] }}</span>{%- endif -%}
+            <span class="pl-tp"></span></label>
+        {%- endfor -%}
+      </div>
+
+      <button type="submit" class="pl-atc" {% unless v0.available %}disabled{% endunless %}>ADD TO CART</button>
+      {{ form | payment_button }}
+    {%- endform -%}
+
+    <div class="pl-desc">{{ product.description }}</div>
+  </div>
+</div>
+<style>
+.ppc-lite{display:grid;grid-template-columns:1fr 1fr;gap:32px;max-width:1180px;margin:0 auto;padding:16px;color:#222;font-family:inherit}
+.ppc-lite *{box-sizing:border-box}
+.ppc-lite .pl-gal{position:relative;min-width:0}
+.ppc-lite .pl-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;border-radius:8px}
+.ppc-lite .pl-track::-webkit-scrollbar{display:none}
+.ppc-lite .pl-track img{flex:0 0 100%;width:100%;height:auto;scroll-snap-align:start;object-fit:cover}
+.ppc-lite .pl-n{position:absolute;right:10px;bottom:10px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:2px 8px;border-radius:99px}
+.ppc-lite .pl-t{font-size:24px;line-height:1.3;margin:0 0 10px}
+.ppc-lite .pl-p{display:flex;gap:10px;align-items:baseline;margin-bottom:14px}
+.ppc-lite .pl-now{color:#d0021b;font-size:24px}.ppc-lite .pl-p s{color:#999}
+.ppc-lite .pl-off{background:#d0021b;color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:3px}
+.ppc-lite .pl-var{width:100%;padding:10px;margin-bottom:12px;border:1px solid #ccc;border-radius:6px}
+.ppc-lite .pl-tiers{display:grid;gap:8px;margin-bottom:14px}
+.ppc-lite .pl-tier{position:relative;display:flex;align-items:center;gap:10px;padding:12px;border:2px solid #e3e3e3;border-radius:8px;cursor:pointer}
+.ppc-lite .pl-tier:has(input:checked){border-color:#fb8c00;background:#fff8ef}
+.ppc-lite .pl-tq em{font-style:normal;color:#d0021b;font-weight:700;margin-left:6px}
+.ppc-lite .pl-badge{position:absolute;top:-9px;right:12px;background:#fb8c00;color:#fff;font-size:11px;font-weight:700;padding:1px 8px;border-radius:99px}
+.ppc-lite .pl-tp{margin-left:auto;font-weight:700}
+.ppc-lite .pl-atc{width:100%;padding:15px;border:0;border-radius:6px;background:#fb8c00;color:#fff;font-size:17px;font-weight:700;cursor:pointer;margin-bottom:10px}
+.ppc-lite .pl-desc{margin-top:20px;line-height:1.6}.ppc-lite .pl-desc img{max-width:100%;height:auto}
+@media (max-width:749px){.ppc-lite{grid-template-columns:1fr;gap:16px;padding:0 0 16px}.ppc-lite .pl-box{padding:0 16px}.ppc-lite .pl-t{font-size:20px}}
+</style>
+<script>
+(function () {
+  var r = document.currentScript.previousElementSibling.previousElementSibling; if (!r || !r.classList.contains('ppc-lite')) return;
+  var tr = r.querySelector('.pl-track'), n = r.querySelector('.pl-n'), tot = tr.children.length;
+  tr.addEventListener('scroll', function () { n.textContent = (Math.round(tr.scrollLeft / tr.clientWidth) + 1) + ' / ' + tot; }, { passive: true });
+  var sel = r.querySelector('.pl-var'), qty = r.querySelector('.pl-qty');
+  function money(c) { return (c / 100).toLocaleString(undefined, { style: 'currency', currency: {{ cart.currency.iso_code | json }} }); }
+  function price() { return sel ? +sel.options[sel.selectedIndex].dataset.price : +r.dataset.price; }
+  function upd() {
+    var u = price();
+    r.querySelector('.pl-now').textContent = money(u);
+    r.querySelectorAll('.pl-tier input').forEach(function (i) {
+      var q = +i.value, off = +i.dataset.off;
+      // Shopify rounds the per-unit discount down to the cent; display follows the same rule
+      i.parentNode.querySelector('.pl-tp').textContent = money(q * (u - Math.floor(u * off / 100)));
+      if (i.checked) qty.value = q;
+    });
+  }
+  r.addEventListener('change', upd); upd();
+})();
+</script>

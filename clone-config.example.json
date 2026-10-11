@@ -44,6 +44,9 @@
   "related": true,
   "_related": "Add the ppc-related section (products from metafield ppc.related). Hidden automatically when the metafield is empty.",
 
+  "social_proof": {"low_stock_max": 5, "max_age_days": 7},
+  "_social_proof": "Replaces the reference's invented counters with REAL data (sections/ppc-social-proof.liquid): 'Only N left' from tracked inventory, 'X in <state> purchased' from shop metafield ppc.recent_orders (real paid orders, real times). Nothing shows when there is no real data. Omit or null to leave it out. See SKILL.md 'Real-data social proof'.",
+
   "drawer": {},
   "_drawer": "Overrides for ppc-cart-drawer settings in this template, e.g. {\"tiers\": \"2:10,3:15,4:20\", \"accent\": \"#222222\"}. insurance_handle / insurance_percent default from store.json.",
 
